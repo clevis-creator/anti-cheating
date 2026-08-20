@@ -1,0 +1,171 @@
+import { User, ActivityLog, Course, Exam, Response, Result } from '../models/index.js';
+import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import { sendVerificationEmail } from '../utils/email.js';
+
+export const getUsers = asyncHandler(async (req, res) => {
+  const { role, search, page = 1, limit = 20, isActive } = req.query;
+  const filter = {};
+
+  if (role) filter.role = role;
+  if (isActive !== undefined) filter.isActive = isActive === 'true';
+  if (search) {
+    filter.$or = [
+      { firstName: new RegExp(search, 'i') },
+      { lastName: new RegExp(search, 'i') },
+      { email: new RegExp(search, 'i') },
+    ];
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [users, total] = await Promise.all([
+    User.find(filter).sort('-createdAt').skip(skip).limit(Number(limit)),
+    User.countDocuments(filter),
+  ]);
+
+  sendSuccess(res, {
+    users,
+    pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) },
+  });
+});
+
+export const getUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id).populate('courses');
+  if (!user) throw new AppError('User not found', 404);
+  sendSuccess(res, { user });
+});
+
+export const createUser = asyncHandler(async (req, res) => {
+  const { firstName, lastName, email, password, role, institution, department, studentId, teacherId } =
+    req.body;
+
+  if (await User.findOne({ email })) throw new AppError('Email already exists', 400);
+
+  const user = await User.create({
+    firstName,
+    lastName,
+    email,
+    password: password || 'ChangeMe123!',
+    role,
+    institution,
+    department,
+    studentId,
+    teacherId,
+    createdBy: req.user._id,
+    isEmailVerified: true,
+  });
+
+  await ActivityLog.create({
+    user: req.user._id,
+    action: 'create_user',
+    resource: 'user',
+    resourceId: user._id,
+    details: `Created ${role}: ${email}`,
+    ipAddress: req.ip,
+  });
+
+  sendSuccess(res, { user }, 'User created', 201);
+});
+
+export const updateUser = asyncHandler(async (req, res) => {
+  const allowed = [
+    'firstName',
+    'lastName',
+    'phone',
+    'institution',
+    'department',
+    'studentId',
+    'teacherId',
+    'isActive',
+    'role',
+    'avatar',
+  ];
+  const updates = {};
+  allowed.forEach((f) => {
+    if (req.body[f] !== undefined) updates[f] = req.body[f];
+  });
+
+  const user = await User.findByIdAndUpdate(req.params.id, updates, {
+    new: true,
+    runValidators: true,
+  });
+  if (!user) throw new AppError('User not found', 404);
+
+  sendSuccess(res, { user }, 'User updated');
+});
+
+export const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw new AppError('User not found', 404);
+  if (user._id.equals(req.user._id)) throw new AppError('Cannot delete your own account', 400);
+
+  user.isActive = false;
+  await user.save();
+
+  sendSuccess(res, null, 'User deactivated');
+});
+
+export const getDashboardStats = asyncHandler(async (req, res) => {
+  const [
+    totalUsers,
+    totalTeachers,
+    totalStudents,
+    totalCourses,
+    totalExams,
+    totalResponses,
+    recentLogs,
+  ] = await Promise.all([
+    User.countDocuments({ isActive: true }),
+    User.countDocuments({ role: 'teacher', isActive: true }),
+    User.countDocuments({ role: 'student', isActive: true }),
+    Course.countDocuments({ isActive: true }),
+    Exam.countDocuments(),
+    Response.countDocuments({ status: { $in: ['submitted', 'graded', 'published'] } }),
+    ActivityLog.find().sort('-createdAt').limit(10).populate('user', 'firstName lastName email role'),
+  ]);
+
+  const results = await Result.find().select('percentage passed');
+  const avgPercentage =
+    results.length > 0
+      ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length)
+      : 0;
+  const passRate =
+    results.length > 0
+      ? Math.round((results.filter((r) => r.passed).length / results.length) * 100)
+      : 0;
+
+  sendSuccess(res, {
+    stats: {
+      totalUsers,
+      totalTeachers,
+      totalStudents,
+      totalCourses,
+      totalExams,
+      totalResponses,
+      avgPercentage,
+      passRate,
+    },
+    recentLogs,
+  });
+});
+
+export const getAuditLogs = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50, severity, user } = req.query;
+  const filter = {};
+  if (severity) filter.severity = severity;
+  if (user) filter.user = user;
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [logs, total] = await Promise.all([
+    ActivityLog.find(filter)
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(Number(limit))
+      .populate('user', 'firstName lastName email role'),
+    ActivityLog.countDocuments(filter),
+  ]);
+
+  sendSuccess(res, {
+    logs,
+    pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) },
+  });
+});

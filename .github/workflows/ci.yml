@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.adminCommand({ ping: 1 })'" --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      MONGODB_URI: mongodb://localhost:27017/examai
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Environment validation
+        working-directory: server
+        run: npm run env:check
+
+      - name: DB connectivity check (smoke)
+        working-directory: server
+        run: npm run db:check
+
+      - name: Run integration checks (migrate, seed, validate)
+        working-directory: server
+        run: npm run integration:check
+
+      - name: Post-deploy verify endpoints (optional)
+        working-directory: tools
+        run: node deploy-verify.js http://127.0.0.1:5000 || true
+
+      - name: Archive logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: server/logs/**

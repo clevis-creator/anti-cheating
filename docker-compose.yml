@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:6
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - '27017:27017'
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongo:27017/examai
+      - NODE_ENV=production
+    depends_on:
+      - mongo
+    ports:
+      - '5000:5000'
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - '8080:80'
+volumes:
+  mongo-data:

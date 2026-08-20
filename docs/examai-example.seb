@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>org_safeexambrowser_SEB_startURL</key>
+  <string>http://127.0.0.1:5174/exam/EXAMPLE_ID</string>
+  <key>org_safeexambrowser_SEB_kiosk</key>
+  <true/>
+  <key>org_safeexambrowser_SEB_allowQuitKeys</key>
+  <false/>
+  <key>org_safeexambrowser_SEB_disableTaskSwitching</key>
+  <true/>
+  <key>org_safeexambrowser_SEB_blockSmartCopyPaste</key>
+  <true/>
+  <key>org_safeexambrowser_SEB_browserWindowType</key>
+  <string>browserWindowTypeFullscreen</string>
+</dict>
+</plist>
