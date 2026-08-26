@@ -1,3 +1,4 @@
+
 # ExamAI — AI Examination System
 
 Production-ready examination platform for schools, universities, certification bodies, and organizations. Combines a Google Forms-style exam builder with AI grading, anti-cheating controls, and real-time proctoring.
@@ -191,3 +192,7 @@ node tools/smoke-test.js http://127.0.0.1:5000 http://127.0.0.1:5173
 ## License
 
 Proprietary — built for educational and institutional use.
+
+# anti-cheating
+anticheating system
+
