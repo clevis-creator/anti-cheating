@@ -106,16 +106,7 @@ export const gradeEssayWithAI = async ({ studentAnswer, referenceAnswer, rubric,
     provider = 'openai';
     result = await gradeWithOpenAI(prompt, aiConfig.openaiKey);
   } else {
-    // Fallback heuristic grading when no API key is configured
-    const score = heuristicGrade(studentAnswer, referenceAnswer, maxMarks);
-    return {
-      provider: 'gemini',
-      score,
-      feedback: 'AI API keys not configured. Applied heuristic grading based on answer length and keyword overlap. Configure Gemini or OpenAI in Settings for full AI grading.',
-      reasoning: 'Fallback heuristic used because no AI provider API key was found.',
-      suggestions: 'Provide more detail and cover key points from the reference answer.',
-      rawResponse: null,
-    };
+    throw new Error('No AI grading provider is configured; manual review is required.');
   }
 
   const score = Math.min(maxMarks, Math.max(0, Number(result.parsed.score) || 0));
@@ -127,24 +118,6 @@ export const gradeEssayWithAI = async ({ studentAnswer, referenceAnswer, rubric,
     suggestions: result.parsed.suggestions || '',
     rawResponse: result.raw,
   };
-};
-
-const heuristicGrade = (studentAnswer, referenceAnswer, maxMarks) => {
-  if (!studentAnswer || !studentAnswer.trim()) return 0;
-  const words = studentAnswer.trim().split(/\s+/).length;
-  let score = Math.min(maxMarks * 0.4, (words / 100) * maxMarks * 0.4);
-
-  if (referenceAnswer) {
-    const refWords = new Set(referenceAnswer.toLowerCase().split(/\W+/).filter(Boolean));
-    const stuWords = studentAnswer.toLowerCase().split(/\W+/).filter(Boolean);
-    const overlap = stuWords.filter((w) => refWords.has(w)).length;
-    const ratio = refWords.size ? overlap / refWords.size : 0;
-    score += ratio * maxMarks * 0.6;
-  } else {
-    score = Math.min(maxMarks * 0.7, (words / 150) * maxMarks);
-  }
-
-  return Math.round(Math.min(maxMarks, score) * 10) / 10;
 };
 
 export default { gradeEssayWithAI, getAIConfig };

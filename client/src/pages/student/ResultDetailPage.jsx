@@ -82,6 +82,16 @@ export default function ResultDetailPage() {
                   Feedback: {ans.feedback}
                 </p>
               )}
+              {result.exam?.settings?.showCorrectAnswers && (
+                <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Correct answer</p>
+                  <p className="mt-1 whitespace-pre-wrap">
+                    {q?.options?.length
+                      ? q.options.filter((option) => option.isCorrect).map((option) => option.text).join(', ')
+                      : (q?.correctAnswers || []).join(', ') || 'See explanation below.'}
+                  </p>
+                </div>
+              )}
               {ai && (
                 <div className="mt-3 rounded-xl border border-brand-200 p-3 text-sm dark:border-brand-900">
                   <p className="font-medium text-brand-800 dark:text-brand-300">AI feedback ({ai.provider})</p>

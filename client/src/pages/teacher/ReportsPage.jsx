@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Download } from 'lucide-react';
-import { reportsAPI, examsAPI } from '../../services/api';
+import { reportsAPI, examsAPI, uploadUrl } from '../../services/api';
 import { PageHeader, Card, Button, Select, Skeleton } from '../../components/ui';
 import { getErrorMessage } from '../../utils/helpers';
 
@@ -43,7 +43,7 @@ export default function ReportsPage() {
     onSuccess: ({ data }) => {
       toast.success('Export ready');
       const url = data.data.fileUrl;
-      window.open(url.startsWith('http') ? url : `http://localhost:5000${url}`, '_blank');
+      window.open(uploadUrl(url), '_blank', 'noopener,noreferrer');
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

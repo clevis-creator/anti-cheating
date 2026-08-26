@@ -13,18 +13,22 @@ import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 
 export const manualGrade = asyncHandler(async (req, res) => {
   const { answerId, marksAwarded, feedback } = req.body;
+  const numericMarks = Number(marksAwarded);
   const response = await Response.findById(req.params.id).populate('exam');
   if (!response) throw new AppError('Response not found', 404);
+  if (req.user.role === 'teacher' && !response.exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   const answer = response.answers.id(answerId);
   if (!answer) throw new AppError('Answer not found', 404);
 
   const question = await Question.findById(answer.question);
-  if (marksAwarded > (question?.marks || 0)) {
+  if (!Number.isFinite(numericMarks) || numericMarks < 0 || numericMarks > (question?.marks || 0)) {
     throw new AppError(`Marks cannot exceed ${question.marks}`, 400);
   }
 
-  answer.marksAwarded = marksAwarded;
+  answer.marksAwarded = numericMarks;
   answer.feedback = feedback || '';
   answer.manuallyGraded = true;
   answer.isCorrect = marksAwarded >= (question.marks || 0) * 0.5;
@@ -55,19 +59,27 @@ export const manualGrade = asyncHandler(async (req, res) => {
 
 export const overrideAIGrade = asyncHandler(async (req, res) => {
   const { score, feedback } = req.body;
+  const numericScore = Number(score);
   const aiGrade = await AIGrade.findById(req.params.id);
   if (!aiGrade) throw new AppError('AI grade not found', 404);
+  const response = await Response.findById(aiGrade.response).populate('exam');
+  if (!response) throw new AppError('Response not found', 404);
+  if (req.user.role === 'teacher' && !response.exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
+  if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > aiGrade.maxMarks) {
+    throw new AppError(`Score must be between 0 and ${aiGrade.maxMarks}`, 400);
+  }
 
   aiGrade.overridden = true;
-  aiGrade.overrideScore = score;
+  aiGrade.overrideScore = numericScore;
   aiGrade.overrideFeedback = feedback;
   aiGrade.overriddenBy = req.user._id;
   await aiGrade.save();
 
-  const response = await Response.findById(aiGrade.response).populate('exam');
   const answer = response.answers.find((a) => a.question.equals(aiGrade.question));
   if (answer) {
-    answer.marksAwarded = score;
+    answer.marksAwarded = numericScore;
     answer.feedback = feedback || aiGrade.feedback;
     answer.manuallyGraded = true;
   }
@@ -96,8 +108,11 @@ export const overrideAIGrade = asyncHandler(async (req, res) => {
 });
 
 export const regradeWithAI = asyncHandler(async (req, res) => {
-  const response = await Response.findById(req.params.id);
+  const response = await Response.findById(req.params.id).populate('exam');
   if (!response) throw new AppError('Response not found', 404);
+  if (req.user.role === 'teacher' && !response.exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   const answer = response.answers.id(req.body.answerId);
   if (!answer) throw new AppError('Answer not found', 404);
@@ -139,9 +154,23 @@ export const regradeWithAI = asyncHandler(async (req, res) => {
   );
 
   const obtainedMarks = response.answers.reduce((s, a) => s + (a.marksAwarded || 0), 0);
+  const totalMarks = response.totalMarks || response.exam.totalMarks;
+  const percentage = totalMarks > 0 ? Math.round((obtainedMarks / totalMarks) * 1000) / 10 : 0;
   response.obtainedMarks = obtainedMarks;
   response.score = obtainedMarks;
+  response.percentage = percentage;
+  response.passed = obtainedMarks >= (response.exam.passingMarks || 0);
   await response.save();
+
+  await Result.findOneAndUpdate(
+    { response: response._id },
+    {
+      obtainedMarks,
+      percentage,
+      grade: calculateLetterGrade(percentage),
+      passed: response.passed,
+    }
+  );
 
   sendSuccess(res, { aiGrade, answer }, 'AI regrade complete');
 });
@@ -150,6 +179,9 @@ export const publishResults = asyncHandler(async (req, res) => {
   const examId = req.params.examId;
   const exam = await Exam.findById(examId);
   if (!exam) throw new AppError('Exam not found', 404);
+  if (req.user.role === 'teacher' && !exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   await Result.updateMany(
     { exam: examId },
@@ -266,6 +298,17 @@ export const getResult = asyncHandler(async (req, res) => {
   }
 
   const aiGrades = await AIGrade.find({ response: result.response?._id });
+  if (req.user.role === 'student' && !result.exam.settings?.showCorrectAnswers) {
+    result.response.answers.forEach((answer) => {
+      const question = answer.question;
+      if (!question) return;
+      delete question.correctAnswers;
+      delete question.explanation;
+      delete question.referenceAnswer;
+      delete question.rubric;
+      question.options = (question.options || []).map(({ isCorrect, ...option }) => option);
+    });
+  }
   sendSuccess(res, { result, aiGrades });
 });
 

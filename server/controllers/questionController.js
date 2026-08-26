@@ -20,6 +20,14 @@ export const getQuestion = asyncHandler(async (req, res) => {
 });
 
 export const createQuestion = asyncHandler(async (req, res) => {
+  if (req.body.exam) {
+    const exam = await Exam.findById(req.body.exam).select('createdBy');
+    if (!exam) throw new AppError('Exam not found', 404);
+    if (req.user.role === 'teacher' && !exam.createdBy.equals(req.user._id)) {
+      throw new AppError('Not authorized', 403);
+    }
+  }
+
   const question = await Question.create({
     ...req.body,
     createdBy: req.user._id,

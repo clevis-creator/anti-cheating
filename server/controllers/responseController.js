@@ -20,6 +20,7 @@ import {
   generateSessionToken,
 } from '../middleware/examSession.js';
 import config from '../config/index.js';
+import { getRemainingSeconds, isExamExpired } from '../utils/examTiming.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
@@ -113,8 +114,14 @@ export const startExam = asyncHandler(async (req, res) => {
     await response.save();
   }
 
+  if (isExamExpired(response, exam)) {
+    await submitExamInternal(response);
+    throw new AppError('Exam time has expired', 409);
+  }
+
   const responseObj = response.toObject();
   responseObj.sessionToken = response.sessionToken;
+  responseObj.timeRemaining = getRemainingSeconds(response, exam);
   delete responseObj.sessionFingerprint;
 
   // Return exam without answers for students
@@ -140,6 +147,10 @@ export const saveProgress = asyncHandler(async (req, res) => {
   if (!response) throw new AppError('Active exam session not found', 404);
 
   const { answers, currentQuestionIndex, timeRemaining, flaggedQuestions } = req.body;
+  const exam = await Exam.findById(response.exam).select('duration endTime');
+  if (!exam) throw new AppError('Exam not found', 404);
+  const remainingSeconds = getRemainingSeconds(response, exam);
+  if (remainingSeconds === 0) throw new AppError('Exam time has expired; submit your attempt', 409);
 
   if (answers) {
     answers.forEach((ans) => {
@@ -154,7 +165,7 @@ export const saveProgress = asyncHandler(async (req, res) => {
   }
 
   if (currentQuestionIndex !== undefined) response.currentQuestionIndex = currentQuestionIndex;
-  if (timeRemaining !== undefined) response.timeRemaining = timeRemaining;
+  response.timeRemaining = remainingSeconds;
   if (flaggedQuestions) response.flaggedQuestions = flaggedQuestions;
   response.autoSavedAt = new Date();
   response.activityLog.push({ action: 'auto_save', details: 'Progress saved' });
@@ -459,12 +470,18 @@ export const submitExam = asyncHandler(async (req, res) => {
   });
   if (!response) throw new AppError('Active exam session not found', 404);
 
-  if (req.body.answers) {
+  const exam = await Exam.findById(response.exam).select('duration endTime');
+  if (!exam) throw new AppError('Exam not found', 404);
+  const expired = isExamExpired(response, exam);
+
+  if (!expired && req.body.answers) {
     req.body.answers.forEach((ans) => {
       const existing = response.answers.find((a) => a.question.toString() === ans.question);
       if (existing && ans.answer !== undefined) existing.answer = ans.answer;
     });
   }
+
+  if (expired) response.activityLog.push({ action: 'time_expired', details: 'Submission received after server deadline' });
 
   const result = await submitExamInternal(response);
 
@@ -500,6 +517,9 @@ export const getResponse = asyncHandler(async (req, res) => {
   const isTeacherOrAdmin = ['teacher', 'admin'].includes(req.user.role);
 
   if (!isOwner && !isTeacherOrAdmin) throw new AppError('Not authorized', 403);
+  if (req.user.role === 'teacher' && !response.exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   // Students only see results if published
   if (isOwner && !isTeacherOrAdmin) {
@@ -518,6 +538,18 @@ export const getResponse = asyncHandler(async (req, res) => {
   }
 
   const aiGrades = await AIGrade.find({ response: response._id });
+  if (isOwner && !isTeacherOrAdmin) {
+    const responseObj = response.toObject();
+    if (responseObj.exam?.questions) {
+      responseObj.exam.questions = responseObj.exam.questions.map((question) => {
+        const { correctAnswers, explanation, referenceAnswer, rubric, ...safe } = question;
+        safe.options = (safe.options || []).map(({ isCorrect, ...option }) => option);
+        return safe;
+      });
+    }
+    return sendSuccess(res, { response: responseObj, aiGrades });
+  }
+
   sendSuccess(res, { response, aiGrades });
 });
 

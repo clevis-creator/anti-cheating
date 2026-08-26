@@ -4,9 +4,9 @@ const client = process.argv[3] || 'http://127.0.0.1:5173';
 const fetch = globalThis.fetch;
 
 async function test() {
-  console.log('Testing server health:', server + '/api/health');
+  console.log('Testing server health:', server + '/healthz');
   try {
-    const res = await fetch(server + '/api/health');
+    const res = await fetch(server + '/healthz');
     console.log('Server status', res.status);
     console.log(await res.text());
   } catch (err) {

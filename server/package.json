@@ -8,13 +8,14 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "seed": "node utils/seed.js",
-      "db:check": "node utils/db-check.js",
-      "env:check": "node utils/validate-env.js",
-      "migrate:run": "node utils/migrate.js",
-      "seed:validate": "node utils/validate-seed.js",
-      "integration:check": "node utils/integration-check.js",
-      "deploy:verify": "node ../tools/deploy-verify.js"
-    },
+    "db:check": "node utils/db-check.js",
+    "env:check": "node utils/validate-env.js",
+    "migrate:run": "node utils/migrate.js",
+    "seed:validate": "node utils/validate-seed.js",
+    "integration:check": "node utils/integration-check.js",
+    "deploy:verify": "node ../tools/deploy-verify.js",
+    "test": "node --test tests/**/*.test.js"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.5",
@@ -31,10 +32,13 @@
     "mongoose": "^8.9.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^9.0.5",
     "openai": "^4.77.0",
     "pdfkit": "^0.15.2",
     "socket.io": "^4.8.1",
     "xss-clean": "^0.1.4"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

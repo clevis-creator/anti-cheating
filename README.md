@@ -118,6 +118,35 @@ npm run build
 npm start
 ```
 
+### Recommended Vercel deployment
+
+Deploy only the `client` directory to Vercel. Deploy the Express API separately on a persistent Node.js host such as Render, Railway, Fly.io, or a VPS, and use MongoDB Atlas for production data.
+
+Vercel settings:
+
+- Root directory: `client`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Vercel environment variables:
+
+```dotenv
+VITE_API_URL=https://your-api-host.example.com/api
+VITE_SOCKET_URL=https://your-api-host.example.com
+```
+
+Backend production variables:
+
+```dotenv
+NODE_ENV=production
+MONGODB_URI=your_mongodb_atlas_connection_string
+JWT_SECRET=replace_with_a_long_random_secret
+MEDIA_SIGN_SECRET=replace_with_another_long_random_secret
+CLIENT_URL=https://your-project.vercel.app
+```
+
+Do not use local MongoDB or local filesystem storage for production proctoring media. Configure persistent object storage such as S3-compatible storage or Cloudinary before production use.
+
 Recommended deployment:
 
 1. MongoDB Atlas for the database  

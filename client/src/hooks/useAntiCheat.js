@@ -124,6 +124,16 @@ export function useAntiCheat({
       cleanups.push(() => document.removeEventListener('contextmenu', onContext));
     }
 
+    const onSelectStart = (e) => {
+      prevent(e);
+      reportWarning('shortcut', 'Text selection attempted');
+    };
+
+    if (antiCheat.disableSelection !== false) {
+      document.addEventListener('selectstart', onSelectStart);
+      cleanups.push(() => document.removeEventListener('selectstart', onSelectStart));
+    }
+
     if (antiCheat.disableCopyPaste !== false || antiCheat.blockDevTools !== false) {
       document.addEventListener('keydown', onKeyDown);
       cleanups.push(() => document.removeEventListener('keydown', onKeyDown));

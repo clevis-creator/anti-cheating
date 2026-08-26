@@ -166,8 +166,8 @@ export function uploadUrl(path) {
     return `${origin}${path}`;
   }
   try {
-    const host = window.location.hostname || '127.0.0.1';
-    return `${window.location.protocol}//${host}:5000${path}`;
+    const origin = window.location.origin || `${window.location.protocol}//${window.location.hostname}`;
+    return `${origin}${path}`;
   } catch {
     return path;
   }

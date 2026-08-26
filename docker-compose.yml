@@ -14,6 +14,9 @@ services:
       - PORT=5000
       - MONGODB_URI=mongodb://mongo:27017/examai
       - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET before deployment}
+      - MEDIA_SIGN_SECRET=${MEDIA_SIGN_SECRET:?Set MEDIA_SIGN_SECRET before deployment}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:8080}
     depends_on:
       - mongo
     ports:
@@ -24,5 +27,7 @@ services:
       dockerfile: Dockerfile.client
     ports:
       - '8080:80'
+    depends_on:
+      - server
 volumes:
   mongo-data:

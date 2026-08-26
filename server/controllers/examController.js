@@ -44,6 +44,10 @@ export const getExam = asyncHandler(async (req, res) => {
 
   if (!exam) throw new AppError('Exam not found', 404);
 
+  if (req.user.role === 'teacher' && !exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
+
   // Strip correct answers for students taking exam (unless results shown)
   if (req.user.role === 'student') {
     const examObj = exam.toObject();
@@ -83,6 +87,9 @@ export const updateExam = asyncHandler(async (req, res) => {
 export const publishExam = asyncHandler(async (req, res) => {
   const exam = await Exam.findById(req.params.id).populate('questions');
   if (!exam) throw new AppError('Exam not found', 404);
+  if (req.user.role === 'teacher' && !exam.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
   if (!exam.questions?.length) throw new AppError('Add questions before publishing', 400);
 
   exam.status = 'published';
@@ -125,6 +132,9 @@ export const deleteExam = asyncHandler(async (req, res) => {
 export const duplicateExam = asyncHandler(async (req, res) => {
   const original = await Exam.findById(req.params.id).populate('questions');
   if (!original) throw new AppError('Exam not found', 404);
+  if (req.user.role === 'teacher' && !original.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   const examData = original.toObject();
   delete examData._id;

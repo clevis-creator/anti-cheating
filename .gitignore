@@ -9,3 +9,19 @@ server/uploads/
 client/dist/
 .vscode/
 coverage/
+# MongoDB local database
+server/local-mongo-data/
+server/local-mongo-log/
+
+# Environment files
+.env
+.env.*
+
+# Node modules and build files
+node_modules/
+dist/
+build/
+coverage/
+
+# Logs
+*.log

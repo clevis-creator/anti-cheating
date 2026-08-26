@@ -3,6 +3,7 @@ dotenv.config();
 
 const errors = [];
 const warnings = [];
+const nodeEnv = process.env.NODE_ENV || 'development';
 
 const requiredAlways = ['MONGODB_URI'];
 requiredAlways.forEach((k) => {
@@ -13,8 +14,10 @@ const mongoUri = process.env.MONGODB_URI;
 if (mongoUri && !/^mongodb(\+srv)?:\/\//i.test(mongoUri)) {
   warnings.push('MONGODB_URI does not look like a MongoDB connection string (expected mongodb:// or mongodb+srv://)');
 }
+if (nodeEnv === 'production' && mongoUri && /127\.0\.0\.1|localhost|@mongo(?::|\/)/i.test(mongoUri)) {
+  errors.push('Production MONGODB_URI must not point to a local or Docker MongoDB host; use MongoDB Atlas or another managed database');
+}
 
-const nodeEnv = process.env.NODE_ENV || 'development';
 if (!process.env.NODE_ENV) warnings.push('NODE_ENV not set, defaulting to development');
 
 const jwt = process.env.JWT_SECRET;
@@ -41,7 +44,7 @@ if (process.env.EMAIL_PORT && Number.isNaN(Number(process.env.EMAIL_PORT))) erro
 if (process.env.PROCTORING_RETENTION_DAYS && Number.isNaN(Number(process.env.PROCTORING_RETENTION_DAYS))) errors.push('PROCTORING_RETENTION_DAYS must be a number');
 
 // MEDIA_SIGN_SECRET may fallback to JWT_SECRET in config; warn if neither present in production
-if (nodeEnv === 'production' && !process.env.MEDIA_SIGN_SECRET && !jwt) warnings.push('MEDIA_SIGN_SECRET and JWT_SECRET are both missing; signing secrets should be set in production');
+if (nodeEnv === 'production' && !process.env.MEDIA_SIGN_SECRET) errors.push('MEDIA_SIGN_SECRET is required in production');
 
 // AI keys are optional but warn if none configured
 if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) warnings.push('No AI provider API keys configured (GEMINI_API_KEY or OPENAI_API_KEY). This is optional unless you use AI features.');

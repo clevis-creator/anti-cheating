@@ -6,9 +6,18 @@ export default function useProctoring({ enabled, responseId, type = 'screen', ch
 
   useEffect(() => {
     if (!enabled || !responseId) return undefined;
+    stopRef.current = false;
     let mediaStream = null;
     let mediaRecorder = null;
     let chunks = [];
+    const timers = new Set();
+    const schedule = (callback, delay) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        callback();
+      }, delay);
+      timers.add(timer);
+    };
 
     const startOnce = async () => {
       try {
@@ -37,10 +46,12 @@ export default function useProctoring({ enabled, responseId, type = 'screen', ch
 
           if (!stopRef.current) {
             // start next chunk
-            setTimeout(() => {
+            schedule(() => {
               try {
-                mediaRecorder && mediaRecorder.start();
-                setTimeout(() => mediaRecorder.stop(), chunkMs);
+                if (mediaRecorder && mediaRecorder.state === 'inactive') mediaRecorder.start();
+                schedule(() => {
+                  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+                }, chunkMs);
               } catch (err) {
                 console.error('Restart recording failed', err);
               }
@@ -49,7 +60,9 @@ export default function useProctoring({ enabled, responseId, type = 'screen', ch
         };
 
         mediaRecorder.start();
-        setTimeout(() => mediaRecorder.stop(), chunkMs);
+        schedule(() => {
+          if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+        }, chunkMs);
       } catch (err) {
         console.error('Proctoring start failed', err);
       }
@@ -59,12 +72,14 @@ export default function useProctoring({ enabled, responseId, type = 'screen', ch
 
     return () => {
       stopRef.current = true;
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
       try {
-        mediaRecorder && mediaRecorder.state === 'recording' && mediaRecorder.stop();
-      } catch (e) {}
+        if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+      } catch {}
       try {
-        mediaStream && mediaStream.getTracks().forEach((t) => t.stop());
-      } catch (e) {}
+        if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, responseId, type, chunkMs]);

@@ -2,9 +2,10 @@ import jwt from 'jsonwebtoken';
 
 import config from '../config/index.js';
 
-import { User, Response } from '../models/index.js';
+import { User, Response, Exam } from '../models/index.js';
 
 import { assertExamMonitorAccess } from '../utils/examAccess.js';
+import { getRemainingSeconds } from '../utils/examTiming.js';
 
 
 
@@ -122,13 +123,19 @@ export const initSocket = (io) => {
 
       if (!examId) return;
 
+      const response = socket.responseId
+        ? await Response.findById(socket.responseId).select('startedAt exam status')
+        : null;
+      const exam = response ? await Exam.findById(response.exam).select('duration endTime') : null;
+      const serverTimeRemaining = response && exam ? getRemainingSeconds(response, exam) : 0;
+
       io.to(`exam:${examId}`).emit('student:status', {
 
         studentId: user._id,
 
         name: `${user.firstName} ${user.lastName}`,
 
-        timeRemaining,
+        timeRemaining: serverTimeRemaining,
 
         currentQuestionIndex,
 
@@ -140,11 +147,11 @@ export const initSocket = (io) => {
 
 
 
-      if (socket.responseId && timeRemaining !== undefined) {
+      if (response && exam && response.status === 'in_progress') {
 
         await Response.findByIdAndUpdate(socket.responseId, {
 
-          timeRemaining,
+          timeRemaining: serverTimeRemaining,
 
           currentQuestionIndex,
 

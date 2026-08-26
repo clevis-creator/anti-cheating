@@ -22,4 +22,5 @@ node tools/generate-seb.js --url "http://127.0.0.1:5174/exam/EXAM_ID" --output e
 Notes & recommendations
 - SEB config files may include secrets or settings — treat generated `.seb` files as sensitive for production exams.
 - For high-stakes exams, require SEB and enforce `requireFullscreen` in exam settings alongside server-side checks.
-- This is a starter integration — SEB supports many advanced options (user authentication, encrypted settings, exam keys). See SEB docs for production hardening.
+- Set `SEB_CONFIG_KEY_HASH` in the backend environment, or set an exam-specific `sebConfigKeyHash`, to validate the `X-SafeExamBrowser-ConfigKeyHash` header.
+- This validates the configured browser key but does not replace SEB's signed/encrypted configuration workflow. Use official SEB exam keys and test the generated configuration before high-stakes use.

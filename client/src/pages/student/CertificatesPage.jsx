@@ -2,16 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Download, Printer, Award } from 'lucide-react';
-import { responsesAPI } from '../../services/api';
+import { responsesAPI, uploadUrl } from '../../services/api';
 import { PageHeader, Card, Badge, Button, Skeleton } from '../../components/ui';
 import { formatDate, getErrorMessage } from '../../utils/helpers';
-
-const ASSET_BASE = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 function resolveAssetUrl(url) {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${ASSET_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+  return uploadUrl(url.startsWith('/') ? url : `/${url}`);
 }
 
 export default function CertificatesPage() {

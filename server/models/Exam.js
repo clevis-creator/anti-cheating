@@ -46,6 +46,7 @@ const examSchema = new mongoose.Schema(
     },
     assignedStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     accessCode: { type: String, default: '' },
+    sebConfigKeyHash: { type: String, default: '' },
     coverImage: { type: String, default: '' },
   },
   { timestamps: true }

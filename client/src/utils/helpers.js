@@ -48,9 +48,21 @@ export const questionTypeLabel = (type) =>
 
 export const getErrorMessage = (err) => {
   if (!err?.response) {
-    return 'Cannot reach the API server. Start the backend with npm run dev:server and ensure MongoDB is running on port 27017.';
+    if (err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT') {
+      return 'The API request timed out. Check that the backend and MongoDB are running.';
+    }
+    if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+      return 'Cannot reach the API server. Start the backend with npm run dev:server and ensure MongoDB is running on port 27017.';
+    }
+    return err?.message || 'Something went wrong';
   }
   const data = err.response.data;
+  if (err.response.status === 401) {
+    return data?.message || 'Your session has expired. Please sign in again.';
+  }
+  if (err.response.status >= 500) {
+    return data?.message || 'The server could not complete that request. Check the backend logs.';
+  }
   if (data?.errors?.length) {
     return data.errors.map((e) => `${e.field}: ${e.message}`).join('; ');
   }

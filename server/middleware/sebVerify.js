@@ -1,4 +1,6 @@
 import AppError from '../utils/helpers.js';
+import crypto from 'crypto';
+import config from '../config/index.js';
 
 /**
  * Safe Exam Browser detection via request headers / user-agent.
@@ -20,6 +22,15 @@ export function assertSEBIfRequired(exam, req) {
   if (!exam.settings?.requireSEB) return;
   if (!isSEBRequest(req)) {
     throw new AppError('This exam requires Safe Exam Browser', 403);
+  }
+
+  const expectedHash = exam.sebConfigKeyHash || config.sebConfigKeyHash;
+  if (expectedHash) {
+    const receivedHash = req.get('x-safeexambrowser-configkeyhash') || '';
+    if (!receivedHash || receivedHash.length !== expectedHash.length ||
+        !crypto.timingSafeEqual(Buffer.from(receivedHash), Buffer.from(expectedHash))) {
+      throw new AppError('Invalid Safe Exam Browser configuration', 403);
+    }
   }
 }
 

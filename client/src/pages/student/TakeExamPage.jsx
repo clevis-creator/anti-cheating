@@ -152,9 +152,10 @@ export default function TakeExamPage() {
         os: navigator.platform,
         device: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
       };
-      const { data } = await responsesAPI.start(examId, deviceInfo);
+      const { data } = await responsesAPI.start(examId, deviceInfo, accessCode);
       const res = data.data.response;
       const ex = data.data.exam;
+      setExamSessionToken(res.sessionToken);
       setExam(ex);
       setResponse(res);
       responseRef.current = res;
@@ -193,6 +194,8 @@ export default function TakeExamPage() {
 
   const startExam = () => setShowConsent(true);
 
+  const isSEB = /SafeExamBrowser/i.test(navigator.userAgent);
+
   const captureAndUploadSelfie = async (responseId, consent = false) => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     let stream = null;
@@ -227,6 +230,10 @@ export default function TakeExamPage() {
 
   const proceedStart = async (consent) => {
     setShowConsent(false);
+    if (requiresSEB && !isSEB) {
+      toast.error('Open this exam in Safe Exam Browser to continue.');
+      return;
+    }
     try {
       const res = await startExamApi(accessCode);
       if (consent && res?._id) {

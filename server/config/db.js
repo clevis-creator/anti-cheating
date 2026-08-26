@@ -4,7 +4,7 @@ const getMongoUri = () => {
   if (process.env.MONGODB_URI) return process.env.MONGODB_URI;
 
   if (process.env.NODE_ENV === 'production') {
-    return 'mongodb://mongo:27017/examai';
+    throw new Error('MONGODB_URI must be set in production. Use a MongoDB Atlas connection string.');
   }
 
   return 'mongodb://127.0.0.1:27017/examai';
@@ -65,7 +65,7 @@ const connectDB = async () => {
     console.error('\n--- MongoDB connection failed ---');
     console.error(`URI: ${uri.replace(/\/\/.*@/, '//***@')}`);
     console.error(
-      'Start MongoDB locally (port 27017) or set MONGODB_URI in server/.env to a valid Atlas connection string.'
+      'Start MongoDB locally for development or set MONGODB_URI to a valid MongoDB Atlas connection string.'
     );
     console.error(`Details: ${err.message}\n`);
     throw err;
