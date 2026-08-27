@@ -15,7 +15,7 @@
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
-    "examai": "file:..",
+   
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.26.0",
     "react": "^19.2.7",
