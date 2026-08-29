@@ -2,6 +2,8 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://anti-cheating-api.onrender.com/api';
 
+console.log('[ExamAI] Production API URL:', API_URL);
+
 let examSessionToken = null;
 
 export function setExamSessionToken(token) {
