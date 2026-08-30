@@ -46,28 +46,49 @@ export const questionTypeLabel = (type) =>
     file_upload: 'File Upload',
   })[type] || type;
 
+
 export const getErrorMessage = (err) => {
+  // No HTTP response usually means a network, CORS, timeout,
+  // connection, or browser-side request failure.
   if (!err?.response) {
     if (err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT') {
-      return 'The API request timed out. Check that the backend and MongoDB are running.';
+      return 'The request timed out. Please check your internet connection and try again.';
     }
-    if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
-      return 'Cannot reach the API server. Start the backend with npm run dev:server and ensure MongoDB is running on port 27017.';
+
+    if (
+      err?.code === 'ERR_NETWORK' ||
+      err?.message === 'Network Error' ||
+      err?.message?.toLowerCase().includes('network error')
+    ) {
+      return 'Unable to connect to the ExamAI server. Please check your internet connection and try again.';
     }
-    return err?.message || 'Something went wrong';
+
+    return err?.message || 'Unable to connect to the server. Please try again.';
   }
+
   const data = err.response.data;
+
   if (err.response.status === 401) {
     return data?.message || 'Your session has expired. Please sign in again.';
   }
+
+  if (err.response.status === 403) {
+    return data?.message || 'You do not have permission to perform this action.';
+  }
+
   if (err.response.status >= 500) {
-    return data?.message || 'The server could not complete that request. Check the backend logs.';
+    return data?.message || 'The server could not complete that request. Please try again later.';
   }
+
   if (data?.errors?.length) {
-    return data.errors.map((e) => `${e.field}: ${e.message}`).join('; ');
+    return data.errors
+      .map((e) => `${e.field}: ${e.message}`)
+      .join('; ');
   }
-  return data?.message || err.message || 'Something went wrong';
+
+  return data?.message || err?.message || 'Something went wrong. Please try again.';
 };
+
 
 export const roleHome = (role) => {
   if (role === 'admin') return '/admin';
