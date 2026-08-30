@@ -28,24 +28,59 @@ const app = express();
 const server = http.createServer(app);
 app.set('trust proxy', 1);
 
+
+
+
+
+
 const corsOptions = {
   origin: (origin, callback) => {
+    // Allow requests without an Origin header
+    // (curl, server-to-server requests, health checks, etc.)
     if (!origin) {
-      callback(null, true);
-      return;
+      return callback(null, true);
     }
 
-    const isLocalhostOrigin = /^(https?:)?\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-    if (isLocalhostOrigin || origin === config.clientUrl) {
-      callback(null, true);
-      return;
+    const isLocalhostOrigin =
+      /^(https?:)?\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+
+    const configuredOrigins = (config.clientUrl || '')
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean);
+
+    const isConfiguredOrigin = configuredOrigins.includes(origin);
+
+    // Allow your Vercel production + preview/deployment URLs
+    const isVercelOrigin =
+      /^https:\/\/anti-cheating-[a-z0-9-]+\.vercel\.app$/i.test(origin) ||
+      /^https:\/\/anti-cheating-kappa\.vercel\.app$/i.test(origin);
+
+    if (isLocalhostOrigin || isConfiguredOrigin || isVercelOrigin) {
+      return callback(null, true);
     }
 
-    callback(new Error(`CORS policy does not allow access from origin ${origin}`));
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return callback(new Error(`CORS policy does not allow access from origin ${origin}`));
   },
+
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Exam-Session',
+  ],
 };
+
+
+
+
+
+
+
 
 const io = new Server(server, { cors: corsOptions });
 
