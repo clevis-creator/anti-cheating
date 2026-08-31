@@ -89,8 +89,13 @@ initSocket(io);
 
 // Security & parsing
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// CORS must run for BOTH preflight and actual API requests.
+app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
 app.use(securityHeaders);
+
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
