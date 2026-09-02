@@ -77,7 +77,11 @@ export default function ExamsListPage({ basePath = '/teacher' }) {
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
                   {exam.questions?.length || 0} questions · {exam.duration} min · {exam.totalMarks}{' '}
-                  marks · Created {formatDate(exam.createdAt)}
+                  marks ·{' '}
+                  {exam.assignedStudents?.length
+                    ? `${exam.assignedStudents.length} assigned`
+                    : 'Open to all students'}
+                  {' · '}Created {formatDate(exam.createdAt)}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

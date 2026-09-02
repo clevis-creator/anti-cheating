@@ -9,6 +9,7 @@ import {
 import { calculateLetterGrade } from '../services/grading.js';
 import { gradeEssayWithAI } from '../services/aiGrading.js';
 import { generateCertificate } from '../services/certificate.js';
+import { assertTeacherExamAccess, studentVisibleExamFilter } from '../utils/examAccess.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 
 export const manualGrade = asyncHandler(async (req, res) => {
@@ -244,6 +245,9 @@ export const getCertificate = asyncHandler(async (req, res) => {
   if (!isOwner && !['admin', 'teacher'].includes(req.user.role)) {
     throw new AppError('Not authorized', 403);
   }
+  if (req.user.role === 'teacher') {
+    assertTeacherExamAccess(req.user, result.exam);
+  }
 
   if (!result.certificateUrl) {
     result.certificateUrl = await generateCertificate({
@@ -266,6 +270,9 @@ export const getResults = asyncHandler(async (req, res) => {
     filter.student = req.user._id;
     filter.published = true;
   } else if (req.query.exam) {
+    const exam = await Exam.findById(req.query.exam);
+    if (!exam) throw new AppError('Exam not found', 404);
+    if (req.user.role === 'teacher') assertTeacherExamAccess(req.user, exam);
     filter.exam = req.query.exam;
   } else if (req.user.role === 'teacher') {
     const exams = await Exam.find({ createdBy: req.user._id }).select('_id');
@@ -295,6 +302,8 @@ export const getResult = asyncHandler(async (req, res) => {
     if (!result.student._id.equals(req.user._id) || !result.published) {
       throw new AppError('Not authorized', 403);
     }
+  } else if (req.user.role === 'teacher') {
+    assertTeacherExamAccess(req.user, result.exam);
   }
 
   const aiGrades = await AIGrade.find({ response: result.response?._id });
@@ -343,7 +352,7 @@ export const getTeacherStats = asyncHandler(async (req, res) => {
 
 export const getStudentStats = asyncHandler(async (req, res) => {
   const [availableExams, responses, results] = await Promise.all([
-    Exam.countDocuments({ status: { $in: ['published', 'active'] } }),
+    Exam.countDocuments(studentVisibleExamFilter(req.user._id)),
     Response.find({ student: req.user._id }),
     Result.find({ student: req.user._id, published: true }),
   ]);

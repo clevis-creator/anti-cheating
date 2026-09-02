@@ -4,7 +4,11 @@ import { useAuth } from './AuthContext';
 
 const SocketContext = createContext(null);
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+const API_URL = import.meta.env.VITE_API_URL || 'https://anti-cheating-api.onrender.com/api';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  API_URL.replace(/\/api\/?$/i, '') ||
+  window.location.origin;
 
 export const SocketProvider = ({ children }) => {
   const { token, isAuthenticated } = useAuth();

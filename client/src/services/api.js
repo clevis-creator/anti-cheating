@@ -78,6 +78,7 @@ export const coursesAPI = {
 export const examsAPI = {
   list: (params) => api.get('/exams', { params }),
   get: (id) => api.get(`/exams/${id}`),
+  assignments: (id) => api.get(`/exams/${id}/assignments`),
   create: (data) => api.post('/exams', data),
   update: (id, data) => api.put(`/exams/${id}`, data),
   publish: (id) => api.post(`/exams/${id}/publish`),

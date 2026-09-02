@@ -1,6 +1,8 @@
 import { User, ActivityLog, Course, Exam, Response, Result } from '../models/index.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import { getTeacherStudentIds } from '../utils/teacherAccess.js';
 import { sendVerificationEmail } from '../utils/email.js';
+import { assertStudentEnrollmentAllowed } from '../utils/platformLimits.js';
 
 export const getUsers = asyncHandler(async (req, res) => {
   const { role, search, page = 1, limit = 20, isActive } = req.query;
@@ -13,6 +15,20 @@ export const getUsers = asyncHandler(async (req, res) => {
       { firstName: new RegExp(search, 'i') },
       { lastName: new RegExp(search, 'i') },
       { email: new RegExp(search, 'i') },
+    ];
+  }
+
+  if (req.user.role === 'teacher') {
+    const studentIds = await getTeacherStudentIds(req.user._id);
+    filter.role = role || 'student';
+    filter.$and = [
+      ...(filter.$and || []),
+      {
+        $or: [
+          { _id: { $in: studentIds } },
+          { createdBy: req.user._id },
+        ],
+      },
     ];
   }
 
@@ -31,6 +47,15 @@ export const getUsers = asyncHandler(async (req, res) => {
 export const getUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id).populate('courses');
   if (!user) throw new AppError('User not found', 404);
+
+  if (req.user.role === 'teacher') {
+    const studentIds = await getTeacherStudentIds(req.user._id);
+    const canAccess =
+      user.createdBy?.equals(req.user._id) ||
+      studentIds.includes(user._id.toString());
+    if (!canAccess) throw new AppError('Not authorized', 403);
+  }
+
   sendSuccess(res, { user });
 });
 
@@ -39,6 +64,10 @@ export const createUser = asyncHandler(async (req, res) => {
     req.body;
 
   if (await User.findOne({ email })) throw new AppError('Email already exists', 400);
+
+  if (role === 'student') {
+    await assertStudentEnrollmentAllowed();
+  }
 
   const user = await User.create({
     firstName,

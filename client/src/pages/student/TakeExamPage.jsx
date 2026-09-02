@@ -136,6 +136,11 @@ export default function TakeExamPage() {
       }
       saveProgressFromRefs().catch(() => {});
     },
+    onActivity: (type, details) => {
+      if (exam?.settings?.antiCheat?.logActivity !== false) {
+        logActivity('monitor_event', `${type}: ${details}`);
+      }
+    },
     onAutoSubmit: handleAutoSubmit,
   });
 
@@ -300,6 +305,19 @@ export default function TakeExamPage() {
     }, 10000);
     return () => clearInterval(t);
   }, [started, socket, examId, timeRemaining, current, answers]);
+
+  useEffect(() => {
+    if (!socket || !started) return undefined;
+
+    const onExamError = (payload) => {
+      toast.error(payload?.message || 'Lost connection to exam monitoring');
+    };
+
+    socket.on('exam:error', onExamError);
+    return () => {
+      socket.off('exam:error', onExamError);
+    };
+  }, [socket, started]);
 
   const questions = exam?.questions || [];
   const question = questions[current];

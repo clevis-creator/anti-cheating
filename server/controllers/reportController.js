@@ -1,11 +1,12 @@
 import { Result, Exam, Response, User, Report, ActivityLog } from '../models/index.js';
 import { exportToCSV, exportToExcel, exportToPDF } from '../services/export.js';
-import { assertExamMonitorAccess } from '../utils/examAccess.js';
+import { assertExamMonitorAccess, assertTeacherExamAccess } from '../utils/examAccess.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 
 export const getExamReport = asyncHandler(async (req, res) => {
   const exam = await Exam.findById(req.params.examId).populate('createdBy', 'firstName lastName');
   if (!exam) throw new AppError('Exam not found', 404);
+  assertTeacherExamAccess(req.user, exam);
 
   const results = await Result.find({ exam: exam._id }).populate(
     'student',
@@ -120,6 +121,10 @@ export const exportReport = asyncHandler(async (req, res) => {
   let title = 'Report';
 
   if (type === 'exam' && examId) {
+    const exam = await Exam.findById(examId);
+    if (!exam) throw new AppError('Exam not found', 404);
+    assertTeacherExamAccess(req.user, exam);
+
     const results = await Result.find({ exam: examId }).populate(
       'student',
       'firstName lastName email studentId'
@@ -137,6 +142,9 @@ export const exportReport = asyncHandler(async (req, res) => {
       Passed: r.passed ? 'Yes' : 'No',
     }));
   } else if (type === 'students') {
+    if (req.user.role === 'teacher') {
+      throw new AppError('Teachers cannot export the global students report', 403);
+    }
     const students = await User.find({ role: 'student' });
     title = 'Students Report';
     rows = students.map((s) => ({
@@ -148,6 +156,9 @@ export const exportReport = asyncHandler(async (req, res) => {
       Verified: s.isEmailVerified ? 'Yes' : 'No',
     }));
   } else if (type === 'activity') {
+    if (req.user.role === 'teacher') {
+      throw new AppError('Teachers cannot export global activity logs', 403);
+    }
     const logs = await ActivityLog.find().sort('-createdAt').limit(500).populate('user', 'email');
     title = 'Activity Logs';
     rows = logs.map((l) => ({

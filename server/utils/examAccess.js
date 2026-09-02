@@ -7,18 +7,46 @@ export async function getExamOrThrow(examId) {
   return exam;
 }
 
-export async function assertExamMonitorAccess(user, examId) {
-  const exam = await getExamOrThrow(examId);
-  if (user.role === 'admin') return exam;
-  if (user.role === 'teacher' && exam.createdBy.equals(user._id)) return exam;
-  throw new AppError('Not authorized to monitor this exam', 403);
+export function isExamOpenToAllStudents(exam) {
+  return !exam.assignedStudents || exam.assignedStudents.length === 0;
+}
+
+export function isStudentAssignedToExam(exam, userId) {
+  const assigned = exam.assignedStudents || [];
+  if (assigned.length === 0) return true;
+  return assigned.some((id) => id.toString() === userId.toString());
 }
 
 export function assertStudentExamAccess(exam, userId) {
-  const assigned = exam.assignedStudents || [];
-  if (assigned.length > 0 && !assigned.some((id) => id.toString() === userId.toString())) {
+  if (!isStudentAssignedToExam(exam, userId)) {
     throw new AppError('You are not assigned to this exam', 403);
   }
+}
+
+export function assertStudentCanViewExam(exam, userId) {
+  if (!['published', 'active'].includes(exam.status)) {
+    throw new AppError('Exam is not available', 403);
+  }
+  assertStudentExamAccess(exam, userId);
+}
+
+export function assertTeacherExamAccess(user, exam) {
+  if (user.role === 'admin') return;
+  if (user.role === 'teacher' && exam.createdBy.equals(user._id)) return;
+  throw new AppError('Not authorized', 403);
+}
+
+export async function assertExamMonitorAccess(user, examId) {
+  const exam = await getExamOrThrow(examId);
+  assertTeacherExamAccess(user, exam);
+  return exam;
+}
+
+export function studentVisibleExamFilter(userId) {
+  return {
+    status: { $in: ['published', 'active'] },
+    $or: [{ assignedStudents: userId }, { assignedStudents: { $size: 0 } }],
+  };
 }
 
 export function assertAccessCode(exam, accessCode) {

@@ -15,9 +15,23 @@ export function useAntiCheat({
   antiCheat = {},
   onWarning,
   onAutoSubmit,
+  onActivity,
 }) {
   const reportingRef = useRef(false);
   const lastWarningRef = useRef({});
+
+  const reportActivity = useCallback(
+    async (type, message) => {
+      if (!enabled || !responseId) return;
+      try {
+        await responsesAPI.warning(responseId, { type, message, severity: 'info' });
+      } catch {
+        onActivity?.(type, message);
+      }
+      onActivity?.(type, message);
+    },
+    [enabled, responseId, onActivity]
+  );
 
   const reportWarning = useCallback(
     async (type, message) => {
@@ -92,6 +106,8 @@ export function useAntiCheat({
     const onVisibility = () => {
       if (document.hidden) {
         reportWarning('tab_switch', 'Tab switch or window hidden detected');
+      } else {
+        reportActivity('tab_visible', 'Tab became visible again');
       }
     };
 
@@ -100,9 +116,15 @@ export function useAntiCheat({
       reportWarning('focus_loss', 'Browser focus lost');
     };
 
+    const onFocus = () => {
+      reportActivity('window_focus', 'Browser regained focus');
+    };
+
     const onFullscreenChange = () => {
       if (requireFullscreen && !document.fullscreenElement) {
         reportWarning('fullscreen_exit', 'Exited fullscreen mode');
+      } else if (document.fullscreenElement) {
+        reportActivity('fullscreen_enter', 'Entered fullscreen mode');
       }
     };
 
@@ -142,9 +164,11 @@ export function useAntiCheat({
     if (antiCheat.detectTabSwitch !== false) {
       document.addEventListener('visibilitychange', onVisibility);
       window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
       cleanups.push(() => {
         document.removeEventListener('visibilitychange', onVisibility);
         window.removeEventListener('blur', onBlur);
+        window.removeEventListener('focus', onFocus);
       });
     }
 
@@ -166,7 +190,7 @@ export function useAntiCheat({
     }
 
     return () => cleanups.forEach((fn) => fn());
-  }, [enabled, requireFullscreen, antiCheat, reportWarning]);
+  }, [enabled, requireFullscreen, antiCheat, reportWarning, reportActivity]);
 
   const enterFullscreen = useCallback(async () => {
     try {

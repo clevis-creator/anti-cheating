@@ -16,6 +16,15 @@ export const getQuestions = asyncHandler(async (req, res) => {
 export const getQuestion = asyncHandler(async (req, res) => {
   const question = await Question.findById(req.params.id);
   if (!question) throw new AppError('Question not found', 404);
+
+  if (req.user.role === 'teacher' && !question.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
+
+  if (req.user.role === 'student') {
+    throw new AppError('Not authorized', 403);
+  }
+
   sendSuccess(res, { question });
 });
 
@@ -45,6 +54,14 @@ export const createBulkQuestions = asyncHandler(async (req, res) => {
   const { examId, questions } = req.body;
   if (!Array.isArray(questions) || !questions.length) {
     throw new AppError('Questions array is required', 400);
+  }
+
+  if (examId) {
+    const exam = await Exam.findById(examId).select('createdBy');
+    if (!exam) throw new AppError('Exam not found', 404);
+    if (req.user.role === 'teacher' && !exam.createdBy.equals(req.user._id)) {
+      throw new AppError('Not authorized', 403);
+    }
   }
 
   const created = await Question.insertMany(
@@ -85,6 +102,15 @@ export const reorderQuestions = asyncHandler(async (req, res) => {
   const { order } = req.body; // [{ id, order }]
   if (!Array.isArray(order)) throw new AppError('Order array required', 400);
 
+  const ids = order.map(({ id }) => id);
+  const questions = await Question.find({ _id: { $in: ids } });
+  if (questions.length !== ids.length) throw new AppError('One or more questions not found', 404);
+
+  if (req.user.role === 'teacher') {
+    const unauthorized = questions.find((question) => !question.createdBy.equals(req.user._id));
+    if (unauthorized) throw new AppError('Not authorized', 403);
+  }
+
   await Promise.all(
     order.map(({ id, order: ord }) => Question.findByIdAndUpdate(id, { order: ord }))
   );
@@ -114,6 +140,10 @@ export const deleteQuestion = asyncHandler(async (req, res) => {
 export const addToBank = asyncHandler(async (req, res) => {
   const question = await Question.findById(req.params.id);
   if (!question) throw new AppError('Question not found', 404);
+
+  if (req.user.role === 'teacher' && !question.createdBy.equals(req.user._id)) {
+    throw new AppError('Not authorized', 403);
+  }
 
   const bankQ = question.toObject();
   delete bankQ._id;

@@ -3,6 +3,7 @@ import { User, Notification, ActivityLog, Settings } from '../models/index.js';
 import { generateToken } from '../utils/jwt.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import { assertStudentEnrollmentAllowed } from '../utils/platformLimits.js';
 
 export const register = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, password, role, institution, studentId, teacherId } = req.body;
@@ -17,6 +18,10 @@ export const register = asyncHandler(async (req, res) => {
 
   // Only admins can create admin/teacher accounts via this public route defaults to student
   const allowedRole = ['student', 'teacher'].includes(role) ? role : 'student';
+
+  if (allowedRole === 'student') {
+    await assertStudentEnrollmentAllowed();
+  }
 
   const user = await User.create({
     firstName,

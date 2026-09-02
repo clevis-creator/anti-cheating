@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getExams,
   getExam,
+  getExamAssignments,
   createExam,
   updateExam,
   publishExam,
@@ -17,6 +18,7 @@ const router = Router();
 router.use(protect);
 
 router.get('/', getExams);
+router.get('/:id/assignments', authorize('admin', 'teacher'), getExamAssignments);
 router.get('/:id', getExam);
 router.post('/', authorize('admin', 'teacher'), examValidator, validate, createExam);
 router.put('/:id', authorize('admin', 'teacher'), examUpdateValidator, validate, updateExam);

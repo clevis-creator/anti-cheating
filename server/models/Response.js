@@ -44,6 +44,7 @@ const responseSchema = new mongoose.Schema(
       {
         type: { type: String },
         message: String,
+        severity: { type: String, default: 'warning' },
         timestamp: { type: Date, default: Date.now },
       },
     ],

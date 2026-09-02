@@ -1,5 +1,9 @@
 import { Course, User } from '../models/index.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import {
+  assertCourseReadAccess,
+  assertCourseTeacherAccess,
+} from '../utils/teacherAccess.js';
 
 export const getCourses = asyncHandler(async (req, res) => {
   const filter = {};
@@ -20,6 +24,7 @@ export const getCourse = asyncHandler(async (req, res) => {
     .populate('teacher', 'firstName lastName email')
     .populate('students', 'firstName lastName email studentId');
   if (!course) throw new AppError('Course not found', 404);
+  await assertCourseReadAccess(req.user, course);
   sendSuccess(res, { course });
 });
 
@@ -39,9 +44,7 @@ export const updateCourse = asyncHandler(async (req, res) => {
   const course = await Course.findById(req.params.id);
   if (!course) throw new AppError('Course not found', 404);
 
-  if (req.user.role === 'teacher' && !course.teacher.equals(req.user._id)) {
-    throw new AppError('Not authorized', 403);
-  }
+  await assertCourseTeacherAccess(req.user, course);
 
   Object.assign(course, req.body);
   await course.save();
@@ -52,6 +55,8 @@ export const enrollStudents = asyncHandler(async (req, res) => {
   const { studentIds } = req.body;
   const course = await Course.findById(req.params.id);
   if (!course) throw new AppError('Course not found', 404);
+
+  await assertCourseTeacherAccess(req.user, course);
 
   course.students = [...new Set([...course.students.map(String), ...studentIds])];
   await course.save();
@@ -69,6 +74,8 @@ export const removeStudent = asyncHandler(async (req, res) => {
   const course = await Course.findById(req.params.id);
   if (!course) throw new AppError('Course not found', 404);
 
+  await assertCourseTeacherAccess(req.user, course);
+
   course.students = course.students.filter((s) => !s.equals(req.params.studentId));
   await course.save();
   await User.findByIdAndUpdate(req.params.studentId, { $pull: { courses: course._id } });
@@ -77,7 +84,11 @@ export const removeStudent = asyncHandler(async (req, res) => {
 });
 
 export const deleteCourse = asyncHandler(async (req, res) => {
-  const course = await Course.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+  const course = await Course.findById(req.params.id);
   if (!course) throw new AppError('Course not found', 404);
+  await assertCourseTeacherAccess(req.user, course);
+
+  course.isActive = false;
+  await course.save();
   sendSuccess(res, null, 'Course deactivated');
 });

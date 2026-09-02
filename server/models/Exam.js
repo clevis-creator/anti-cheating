@@ -53,6 +53,7 @@ const examSchema = new mongoose.Schema(
 );
 
 examSchema.index({ createdBy: 1, status: 1 });
+examSchema.index({ assignedStudents: 1, status: 1 });
 examSchema.index({ startTime: 1, endTime: 1 });
 
 export default mongoose.model('Exam', examSchema);

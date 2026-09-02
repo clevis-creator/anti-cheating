@@ -33,6 +33,14 @@ const config = {
   proctoringRetentionDays: Number(process.env.PROCTORING_RETENTION_DAYS) || 30,
   mediaSignSecret: effectiveMediaSignSecret,
   warningCooldownMs: Number(process.env.WARNING_COOLDOWN_MS) || 10_000,
+  marketingMode:
+    process.env.MARKETING_MODE === 'true' ||
+    process.env.MARKETING_MODE === '1' ||
+    process.env.MARKETING_MODE === 'yes',
+  studentLimit:
+    process.env.STUDENT_LIMIT === undefined || process.env.STUDENT_LIMIT === ''
+      ? null
+      : Number(process.env.STUDENT_LIMIT),
 };
 
 if (config.nodeEnv === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === defaultJwtSecret)) {

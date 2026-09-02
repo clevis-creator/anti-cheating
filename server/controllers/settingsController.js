@@ -23,6 +23,8 @@ export const getSettings = asyncHandler(async (req, res) => {
   if (!map.openai_api_key && config.ai.openaiKey) map.openai_api_key = maskKey(config.ai.openaiKey);
   if (!map.site_name) map.site_name = 'ExamAI';
   if (!map.allow_registration) map.allow_registration = true;
+  if (map.marketing_mode === undefined) map.marketing_mode = config.marketingMode;
+  if (map.student_limit === undefined) map.student_limit = config.studentLimit;
 
   sendSuccess(res, { settings: map });
 });

@@ -219,7 +219,9 @@ export default function LiveMonitorPage() {
               >
                 <p className="font-medium">{e.studentName || e.studentId}</p>
                 <p className="text-xs opacity-80">
-                  {e.kind === 'warning' ? `${e.type}: ${e.message}` : 'Submitted exam'}
+                  {e.kind === 'warning'
+                    ? `${e.type}: ${e.message}${e.severity === 'info' ? ' (info)' : ''}`
+                    : 'Submitted exam'}
                 </p>
               </div>
             ))}

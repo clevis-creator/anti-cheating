@@ -21,6 +21,7 @@ import {
 } from '../middleware/examSession.js';
 import config from '../config/index.js';
 import { getRemainingSeconds, isExamExpired } from '../utils/examTiming.js';
+import { emitToMonitors } from '../socket/index.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
@@ -31,17 +32,26 @@ const uploadDir = path.join(__dirname, '..', 'uploads');
 
 const VALID_WARNING_TYPES = new Set([
   'tab_switch',
+  'tab_hidden',
   'focus_loss',
+  'window_blur',
+  'window_focus',
   'copy_paste',
   'right_click',
   'shortcut',
   'devtools',
   'fullscreen_exit',
+  'fullscreen_enter',
+  'tab_visible',
 ]);
+
+const INFORMATIONAL_TYPES = new Set(['tab_visible', 'window_focus', 'fullscreen_enter']);
 
 const WARNING_GROUPS = {
   tab_switch: 'focus',
+  tab_hidden: 'focus',
   focus_loss: 'focus',
+  window_blur: 'focus',
 };
 
 function warningGroup(type) {
@@ -179,7 +189,9 @@ export const logWarning = asyncHandler(async (req, res) => {
     _id: req.params.id,
     student: req.user._id,
     status: 'in_progress',
-  }).populate('exam');
+  })
+    .select('+sessionToken')
+    .populate('exam');
 
   if (!response) throw new AppError('Active exam session not found', 404);
 
@@ -192,12 +204,47 @@ export const logWarning = asyncHandler(async (req, res) => {
     throw new AppError('Invalid exam session token', 403);
   }
 
-  const { type, message } = req.body;
+  const { type, message, severity = 'warning' } = req.body;
   if (!type || !VALID_WARNING_TYPES.has(type)) {
     throw new AppError('Invalid warning type', 400);
   }
 
   const maxWarnings = response.exam.settings?.antiCheat?.maxWarnings || 3;
+
+  const logEntry = {
+    type,
+    message: message || type,
+    severity: INFORMATIONAL_TYPES.has(type) ? 'info' : severity,
+    timestamp: new Date(),
+  };
+
+  if (INFORMATIONAL_TYPES.has(type)) {
+    response.warningLogs.push(logEntry);
+    response.activityLog.push({
+      action: 'monitor_event',
+      details: `${type}: ${message || type}`,
+    });
+    await response.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      emitToMonitors(io, response.exam._id, 'student:warning', {
+        studentId: req.user._id,
+        studentName: `${req.user.firstName} ${req.user.lastName}`,
+        warnings: response.warnings,
+        type,
+        message,
+        severity: 'info',
+        autoSubmitted: false,
+      });
+    }
+
+    return sendSuccess(
+      res,
+      { warnings: response.warnings, autoSubmitted: false, maxWarnings, informational: true },
+      'Event logged'
+    );
+  }
 
   if (shouldSkipWarning(response, type)) {
     return sendSuccess(
@@ -210,7 +257,7 @@ export const logWarning = asyncHandler(async (req, res) => {
   response.warnings += 1;
   response.lastWarningAt = new Date();
   response.lastWarningType = type;
-  response.warningLogs.push({ type, message: message || type });
+  response.warningLogs.push(logEntry);
   response.activityLog.push({
     action: 'warning',
     details: `${type}: ${message || type}`,
@@ -238,15 +285,16 @@ export const logWarning = asyncHandler(async (req, res) => {
     await response.save();
   }
 
-  // Emit via socket if available
+  // Emit via socket to authorized monitors only
   const io = req.app.get('io');
   if (io) {
-    io.to(`exam:${response.exam._id}`).emit('student:warning', {
+    emitToMonitors(io, response.exam._id, 'student:warning', {
       studentId: req.user._id,
       studentName: `${req.user.firstName} ${req.user.lastName}`,
       warnings: response.warnings,
       type,
       message,
+      severity: 'warning',
       autoSubmitted,
     });
   }
@@ -487,7 +535,7 @@ export const submitExam = asyncHandler(async (req, res) => {
 
   const io = req.app.get('io');
   if (io) {
-    io.to(`exam:${response.exam}`).emit('student:submitted', {
+    emitToMonitors(io, response.exam, 'student:submitted', {
       studentId: req.user._id,
       responseId: response._id,
     });
