@@ -9,8 +9,8 @@ import {
   assertStudentExamAccess,
 } from '../utils/examAccess.js';
 import { getRemainingSeconds } from '../utils/examTiming.js';
-
-const onlineStudents = new Map(); // examId -> Map(studentId -> socketMeta)
+import { getRequireEmailVerification } from '../utils/settingsReader.js';
+import * as onlineStore from '../utils/onlineStore.js';
 
 function monitorRoom(examId) {
   return `exam:${examId}:monitors`;
@@ -18,6 +18,15 @@ function monitorRoom(examId) {
 
 function emitToMonitors(io, examId, event, payload) {
   io.to(monitorRoom(examId)).emit(event, payload);
+}
+
+async function emitOnlineStudents(io, examId) {
+  const students = await onlineStore.listStudentsForExam(examId);
+  emitToMonitors(io, examId, 'students:online', {
+    examId,
+    count: students.length,
+    students,
+  });
 }
 
 export const initSocket = (io) => {
@@ -48,6 +57,12 @@ export const initSocket = (io) => {
       if (!examId || user.role !== 'student') return;
 
       try {
+        const requireVerified = await getRequireEmailVerification();
+        if (requireVerified && !user.isEmailVerified) {
+          socket.emit('exam:error', { message: 'Please verify your email before taking exams.' });
+          return;
+        }
+
         const exam = await Exam.findById(examId).select('assignedStudents status');
         if (!exam || !['published', 'active'].includes(exam.status)) {
           socket.emit('exam:error', { message: 'Exam is not available' });
@@ -73,9 +88,7 @@ export const initSocket = (io) => {
         socket.examId = examId;
         socket.responseId = responseId;
 
-        if (!onlineStudents.has(examId)) onlineStudents.set(examId, new Map());
-
-        onlineStudents.get(examId).set(user._id.toString(), {
+        await onlineStore.setStudent(examId, user._id.toString(), {
           studentId: user._id,
           name: `${user.firstName} ${user.lastName}`,
           socketId: socket.id,
@@ -83,21 +96,17 @@ export const initSocket = (io) => {
           responseId,
         });
 
-        emitToMonitors(io, examId, 'students:online', {
-          examId,
-          count: onlineStudents.get(examId).size,
-          students: Array.from(onlineStudents.get(examId).values()),
-        });
+        await emitOnlineStudents(io, examId);
       } catch (err) {
         socket.emit('exam:error', { message: err.message || 'Not authorized for this exam' });
       }
     });
 
-    socket.on('exam:leave', ({ examId }) => {
+    socket.on('exam:leave', async ({ examId }) => {
       const id = examId || socket.examId;
       if (!id) return;
       socket.leave(`exam:${id}`);
-      removeStudent(io, id, user._id.toString());
+      await removeStudent(io, id, user._id.toString());
     });
 
     socket.on('student:heartbeat', async ({ examId, timeRemaining, currentQuestionIndex, progress }) => {
@@ -137,35 +146,28 @@ export const initSocket = (io) => {
         socket.join(monitorRoom(examId));
         socket.join(`exam:${examId}`);
 
-        const students = onlineStudents.get(examId);
+        const students = await onlineStore.listStudentsForExam(examId);
         socket.emit('students:online', {
           examId,
-          count: students?.size || 0,
-          students: students ? Array.from(students.values()) : [],
+          count: students.length,
+          students,
         });
       } catch {
         socket.emit('monitor:error', { message: 'Not authorized to monitor this exam' });
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       if (socket.examId && user.role === 'student') {
-        removeStudent(io, socket.examId, user._id.toString());
+        await removeStudent(io, socket.examId, user._id.toString());
       }
     });
   });
 };
 
-const removeStudent = (io, examId, studentId) => {
-  const map = onlineStudents.get(examId);
-  if (!map) return;
-  map.delete(studentId);
-  emitToMonitors(io, examId, 'students:online', {
-    examId,
-    count: map.size,
-    students: Array.from(map.values()),
-  });
-  if (map.size === 0) onlineStudents.delete(examId);
+const removeStudent = async (io, examId, studentId) => {
+  await onlineStore.removeStudent(examId, studentId);
+  await emitOnlineStudents(io, examId);
 };
 
 export { emitToMonitors, monitorRoom };

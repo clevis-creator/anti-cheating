@@ -23,7 +23,7 @@ import {
   getStudentStats,
 } from '../controllers/gradingController.js';
 import { getMediaAccessUrl, downloadMedia } from '../controllers/mediaController.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, requireVerifiedEmail } from '../middleware/auth.js';
 import { requireExamSession } from '../middleware/examSession.js';
 import { upload } from '../utils/upload.js';
 
@@ -42,20 +42,20 @@ router.get('/results', getResults);
 router.get('/results/:id', getResult);
 router.get('/results/:id/certificate', getCertificate);
 router.get('/exam/:examId', authorize('admin', 'teacher'), getExamResponses);
-router.post('/exam/:examId/start', authorize('student'), startExam);
+router.post('/exam/:examId/start', authorize('student'), requireVerifiedEmail, startExam);
 router.post('/exam/:examId/publish', authorize('admin', 'teacher'), publishResults);
 router.get('/:id', getResponse);
 router.get('/:id/media/:filename/access', getMediaAccessUrl);
-router.put('/:id/save', authorize('student'), requireExamSession, saveProgress);
-router.post('/:id/submit', authorize('student'), requireExamSession, submitExam);
-router.post('/:id/warning', authorize('student'), logWarning);
-router.post('/:id/activity', authorize('student'), requireExamSession, logActivity);
-router.post('/:id/media', authorize('student'), requireExamSession, upload.single('file'), uploadProctoringMedia);
+router.put('/:id/save', authorize('student'), requireVerifiedEmail, requireExamSession, saveProgress);
+router.post('/:id/submit', authorize('student'), requireVerifiedEmail, requireExamSession, submitExam);
+router.post('/:id/warning', authorize('student'), requireVerifiedEmail, logWarning);
+router.post('/:id/activity', authorize('student'), requireVerifiedEmail, requireExamSession, logActivity);
+router.post('/:id/media', authorize('student'), requireVerifiedEmail, requireExamSession, upload.single('file'), uploadProctoringMedia);
 router.post('/:id/grade', authorize('admin', 'teacher'), manualGrade);
 router.post('/:id/regrade-ai', authorize('admin', 'teacher'), regradeWithAI);
 router.put('/ai-grades/:id/override', authorize('admin', 'teacher'), overrideAIGrade);
 
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', authorize('student'), upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
   res.json({
     success: true,

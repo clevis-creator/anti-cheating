@@ -307,6 +307,19 @@ export default function TakeExamPage() {
   }, [started, socket, examId, timeRemaining, current, answers]);
 
   useEffect(() => {
+    if (!socket || !started || !response?._id) return undefined;
+
+    const rejoin = () => {
+      socket.emit('exam:join', { examId, responseId: response._id });
+    };
+
+    socket.on('connect', rejoin);
+    return () => {
+      socket.off('connect', rejoin);
+    };
+  }, [socket, started, examId, response?._id]);
+
+  useEffect(() => {
     if (!socket || !started) return undefined;
 
     const onExamError = (payload) => {

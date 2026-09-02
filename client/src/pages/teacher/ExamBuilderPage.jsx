@@ -125,6 +125,12 @@ export default function ExamBuilderPage() {
     enabled: !isNew,
   });
 
+  const { data: assignmentData } = useQuery({
+    queryKey: ['exam-assignments', examId],
+    queryFn: async () => (await examsAPI.assignments(examId)).data.data,
+    enabled: !!examId && !isNew,
+  });
+
   useEffect(() => {
     if (existing) {
       setExam({
@@ -270,7 +276,18 @@ export default function ExamBuilderPage() {
     moveQuestion(dragIndex, index);
     setDragIndex(index);
   };
-  const onDragEnd = () => setDragIndex(null);
+  const onDragEnd = async () => {
+    setDragIndex(null);
+    const order = questions
+      .filter((q) => q._id)
+      .map((q, index) => ({ id: q._id, order: index }));
+    if (!order.length) return;
+    try {
+      await questionsAPI.reorder(order);
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
 
   const active = questions[activeIdx];
 
@@ -402,6 +419,39 @@ export default function ExamBuilderPage() {
                 </Select>
                 <p className="mt-2 text-xs text-slate-500">Leave empty to make the exam available to all active students.</p>
               </div>
+              {!!assignmentData?.assignments?.length && (
+                <div className="sm:col-span-2">
+                  <h4 className="mb-2 text-sm font-semibold">Assignment status</h4>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-mist/50 dark:bg-slate-900">
+                        <tr>
+                          <th className="px-3 py-2">Student</th>
+                          <th className="px-3 py-2">Status</th>
+                          <th className="px-3 py-2">Warnings</th>
+                          <th className="px-3 py-2">Submitted</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assignmentData.assignments.map((row) => (
+                          <tr key={row.student._id} className="border-t border-slate-100 dark:border-slate-800">
+                            <td className="px-3 py-2">
+                              {row.student.firstName} {row.student.lastName}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge>{row.status.replace('_', ' ')}</Badge>
+                            </td>
+                            <td className="px-3 py-2">{row.warnings}</td>
+                            <td className="px-3 py-2">
+                              {row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <TextArea
                   label="Description"

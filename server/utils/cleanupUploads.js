@@ -2,14 +2,14 @@ import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { Response, ActivityLog } from '../models/index.js';
-import config from '../config/index.js';
+import { getProctoringRetentionDays } from './settingsReader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, '..', 'uploads');
 
 export async function runCleanup() {
-  const retentionDays = Number(config.proctoringRetentionDays || 30);
+  const retentionDays = await getProctoringRetentionDays();
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
   try {
     // Ensure uploadDir exists

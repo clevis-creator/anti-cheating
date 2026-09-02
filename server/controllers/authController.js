@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { User, Notification, ActivityLog, Settings } from '../models/index.js';
 import { generateToken } from '../utils/jwt.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
+import { getRequireEmailVerification } from '../utils/settingsReader.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 import { assertStudentEnrollmentAllowed } from '../utils/platformLimits.js';
 
@@ -83,9 +84,11 @@ export const login = asyncHandler(async (req, res) => {
   });
 
   const token = generateToken(user._id, user.role);
+  const requiresEmailVerification = await getRequireEmailVerification();
 
   sendSuccess(res, {
     token,
+    requiresEmailVerification,
     user: {
       id: user._id,
       firstName: user.firstName,
@@ -100,7 +103,8 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const getMe = asyncHandler(async (req, res) => {
-  sendSuccess(res, { user: req.user });
+  const requiresEmailVerification = await getRequireEmailVerification();
+  sendSuccess(res, { user: req.user, requiresEmailVerification });
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {

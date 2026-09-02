@@ -10,6 +10,7 @@ import {
   assertCourseTeacherAccess,
 } from '../utils/teacherAccess.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import { sanitizeExamForStudent } from '../utils/examSanitize.js';
 
 async function validateExamWritePayload(user, body = {}) {
   if (body.course) {
@@ -55,6 +56,10 @@ export const getExams = asyncHandler(async (req, res) => {
 
   const exams = await query;
 
+  if (req.user.role === 'student') {
+    return sendSuccess(res, { exams: exams.map(sanitizeExamForStudent) });
+  }
+
   sendSuccess(res, { exams });
 });
 
@@ -77,14 +82,7 @@ export const getExam = asyncHandler(async (req, res) => {
 
   // Strip correct answers for students taking exam (unless results shown)
   if (req.user.role === 'student') {
-    const examObj = exam.toObject();
-    delete examObj.accessCode;
-    examObj.questions = (examObj.questions || []).map((q) => {
-      const { correctAnswers, explanation, referenceAnswer, rubric, ...safe } = q;
-      safe.options = (safe.options || []).map(({ isCorrect, ...opt }) => opt);
-      return safe;
-    });
-    return sendSuccess(res, { exam: examObj });
+    return sendSuccess(res, { exam: sanitizeExamForStudent(exam) });
   }
 
   sendSuccess(res, { exam });

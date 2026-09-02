@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { coursesAPI, usersAPI } from '../../services/api';
 import { PageHeader, Button, Input, TextArea, Card, Badge, Modal, Skeleton } from '../../components/ui';
 import { getErrorMessage } from '../../utils/helpers';
@@ -11,6 +11,9 @@ export default function CoursesPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [activeCourse, setActiveCourse] = useState(null);
+  const [selectedStudents, setSelectedStudents] = useState([]);
   const [form, setForm] = useState({ title: '', code: '', description: '', teacher: '' });
 
   const { data, isLoading } = useQuery({
@@ -24,6 +27,12 @@ export default function CoursesPage() {
     enabled: user?.role === 'admin',
   });
 
+  const { data: students } = useQuery({
+    queryKey: ['students'],
+    queryFn: async () => (await usersAPI.list({ role: 'student' })).data.data.users,
+    enabled: enrollOpen,
+  });
+
   const createMut = useMutation({
     mutationFn: (payload) => coursesAPI.create(payload),
     onSuccess: () => {
@@ -33,6 +42,34 @@ export default function CoursesPage() {
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
+
+  const enrollMut = useMutation({
+    mutationFn: ({ courseId, studentIds }) => coursesAPI.enroll(courseId, studentIds),
+    onSuccess: () => {
+      toast.success('Students enrolled');
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      setEnrollOpen(false);
+      setSelectedStudents([]);
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: ({ courseId, studentId }) => coursesAPI.removeStudent(courseId, studentId),
+    onSuccess: () => {
+      toast.success('Student removed');
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const openEnroll = (course) => {
+    setActiveCourse(course);
+    setSelectedStudents([]);
+    setEnrollOpen(true);
+  };
 
   return (
     <div>
@@ -68,6 +105,29 @@ export default function CoursesPage() {
                 Teacher: {c.teacher?.firstName} {c.teacher?.lastName}
               </p>
               <p className="text-xs text-slate-400">{c.students?.length || 0} students enrolled</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={() => openEnroll(c)}>
+                  <Users size={14} /> Manage students
+                </Button>
+              </div>
+              {!!c.students?.length && (
+                <div className="mt-3 space-y-1">
+                  {c.students.slice(0, 5).map((s) => (
+                    <div key={s._id} className="flex items-center justify-between text-xs text-slate-500">
+                      <span>
+                        {s.firstName} {s.lastName}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-red-600"
+                        onClick={() => removeMut.mutate({ courseId: c._id, studentId: s._id })}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -101,6 +161,40 @@ export default function CoursesPage() {
           )}
           <Button className="w-full" loading={createMut.isPending} onClick={() => createMut.mutate(form)}>
             Create
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={enrollOpen}
+        onClose={() => setEnrollOpen(false)}
+        title={`Enroll students — ${activeCourse?.title || ''}`}
+      >
+        <div className="space-y-3">
+          <label className="text-sm font-medium">Select students</label>
+          <select
+            multiple
+            className="min-h-[180px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+            value={selectedStudents}
+            onChange={(e) =>
+              setSelectedStudents(Array.from(e.target.selectedOptions, (option) => option.value))
+            }
+          >
+            {(students || []).map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.firstName} {s.lastName} — {s.email}
+              </option>
+            ))}
+          </select>
+          <Button
+            className="w-full"
+            loading={enrollMut.isPending}
+            disabled={!selectedStudents.length}
+            onClick={() =>
+              enrollMut.mutate({ courseId: activeCourse._id, studentIds: selectedStudents })
+            }
+          >
+            Enroll selected students
           </Button>
         </div>
       </Modal>

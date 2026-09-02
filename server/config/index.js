@@ -41,6 +41,14 @@ const config = {
     process.env.STUDENT_LIMIT === undefined || process.env.STUDENT_LIMIT === ''
       ? null
       : Number(process.env.STUDENT_LIMIT),
+  redisUrl: process.env.REDIS_URL || '',
+  requireEmailVerification:
+    process.env.REQUIRE_EMAIL_VERIFICATION === 'true' ||
+    (process.env.REQUIRE_EMAIL_VERIFICATION !== 'false' &&
+      nodeEnv === 'production' &&
+      process.env.MARKETING_MODE !== 'true' &&
+      process.env.MARKETING_MODE !== '1' &&
+      process.env.MARKETING_MODE !== 'yes'),
 };
 
 if (config.nodeEnv === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === defaultJwtSecret)) {

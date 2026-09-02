@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { settingsAPI } from '../../services/api';
 import { Button, Card } from '../../components/ui';
 
@@ -22,7 +23,9 @@ export default function ProctoringSettingsPage() {
     setSaving(true);
     try {
       await settingsAPI.update({ proctoring_retention_days: retention });
+      toast.success('Proctoring settings saved');
     } catch (err) {
+      toast.error('Failed to save proctoring settings');
       console.error(err);
     } finally {
       setSaving(false);

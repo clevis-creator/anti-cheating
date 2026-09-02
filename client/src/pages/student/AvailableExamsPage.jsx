@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { examsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader, Card, Button, Badge, Skeleton } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 
 export default function AvailableExamsPage() {
+  const { mustVerifyEmailBeforeExam } = useAuth();
+
   const { data: exams, isLoading } = useQuery({
     queryKey: ['student-exams'],
     queryFn: async () => (await examsAPI.list()).data.data.exams,
@@ -32,8 +35,14 @@ export default function AvailableExamsPage() {
                 <p>Passing: {exam.passingMarks}</p>
                 <p>Ends: {formatDateTime(exam.endTime)}</p>
               </div>
-              <Link to={`/student/exams/${exam._id}/take`} className="mt-4 inline-block">
-                <Button>Take exam</Button>
+              <Link
+                to={mustVerifyEmailBeforeExam ? '#' : `/student/exams/${exam._id}/take`}
+                className="mt-4 inline-block"
+                onClick={(e) => mustVerifyEmailBeforeExam && e.preventDefault()}
+              >
+                <Button disabled={mustVerifyEmailBeforeExam}>
+                  {mustVerifyEmailBeforeExam ? 'Verify email to start' : 'Take exam'}
+                </Button>
               </Link>
             </Card>
           ))}

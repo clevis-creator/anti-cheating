@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { responsesAPI } from '../../services/api';
 import { PageHeader, Card, Button, Badge, Input, TextArea, Modal, Skeleton } from '../../components/ui';
 import { formatDateTime, getErrorMessage, questionTypeLabel } from '../../utils/helpers';
 
 export default function GradingPage() {
+  const { responseId: routeResponseId } = useParams();
   const qc = useQueryClient();
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -17,11 +18,17 @@ export default function GradingPage() {
     queryFn: async () => (await responsesAPI.pending()).data.data.responses,
   });
 
-  const loadDetail = async (id) => {
+  const loadDetail = useCallback(async (id) => {
     const { data } = await responsesAPI.get(id);
     setDetail(data.data);
     setSelected(id);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (routeResponseId) {
+      loadDetail(routeResponseId).catch((e) => toast.error(getErrorMessage(e)));
+    }
+  }, [routeResponseId, loadDetail]);
 
   const gradeMut = useMutation({
     mutationFn: () =>

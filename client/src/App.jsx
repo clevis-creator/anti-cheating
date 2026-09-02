@@ -18,6 +18,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersPage from './pages/admin/UsersPage';
 import CoursesPage from './pages/admin/CoursesPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import ProctoringSettingsPage from './pages/admin/ProctoringSettingsPage';
 import AuditLogsPage from './pages/admin/AuditLogsPage';
 
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -76,6 +77,7 @@ export default function App() {
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="audit-logs" element={<AuditLogsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
+                    <Route path="proctoring" element={<ProctoringSettingsPage />} />
                     <Route path="notifications" element={<NotificationsPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                   </Route>
@@ -91,7 +93,7 @@ export default function App() {
                     <Route path="exams/:id/edit" element={<ExamBuilderPage />} />
                     <Route path="question-bank" element={<QuestionBankPage />} />
                     <Route path="students" element={<StudentsPage />} />
-                    <Route path="grading" element={<GradingPage />} />
+                    <Route path="grading/:responseId?" element={<GradingPage />} />
                     <Route path="monitor/:examId" element={<LiveMonitorPage />} />
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="notifications" element={<NotificationsPage />} />

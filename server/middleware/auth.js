@@ -1,5 +1,6 @@
 import { User, ActivityLog } from '../models/index.js';
 import { getTokenFromHeader, verifyToken } from '../utils/jwt.js';
+import { getRequireEmailVerification } from '../utils/settingsReader.js';
 import AppError, { asyncHandler } from '../utils/helpers.js';
 
 export const protect = asyncHandler(async (req, res, next) => {
@@ -26,6 +27,19 @@ export const authorize = (...roles) => (req, res, next) => {
   }
   next();
 };
+
+export const requireVerifiedEmail = asyncHandler(async (req, _res, next) => {
+  if (req.user.role !== 'student') return next();
+
+  const required = await getRequireEmailVerification();
+  if (!required) return next();
+
+  if (!req.user.isEmailVerified) {
+    throw new AppError('Please verify your email before taking exams.', 403);
+  }
+
+  next();
+});
 
 export const optionalAuth = asyncHandler(async (req, _res, next) => {
   const token = getTokenFromHeader(req);

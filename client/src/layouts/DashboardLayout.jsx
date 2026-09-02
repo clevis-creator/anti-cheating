@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { notificationsAPI } from '../services/api';
 import { cn } from '../utils/helpers';
+import EmailVerificationBanner from '../components/EmailVerificationBanner';
 
 const navByRole = {
   admin: [
@@ -32,6 +33,7 @@ const navByRole = {
     { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
     { to: '/admin/audit-logs', label: 'Audit Logs', icon: Shield },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
+    { to: '/admin/proctoring', label: 'Proctoring', icon: Shield },
   ],
   teacher: [
     { to: '/teacher', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -183,6 +185,7 @@ export default function DashboardLayout() {
         </header>
 
         <main className="flex-1 overflow-auto p-4 sm:p-6">
+          <EmailVerificationBanner />
           <Outlet />
         </main>
       </div>

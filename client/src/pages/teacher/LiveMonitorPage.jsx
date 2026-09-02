@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { Wifi, AlertTriangle } from 'lucide-react';
 import { reportsAPI, examsAPI, responsesAPI, getSignedMediaUrl } from '../../services/api';
 import { useSocket } from '../../contexts/SocketContext';
@@ -29,7 +30,10 @@ export default function LiveMonitorPage() {
 
   useEffect(() => {
     if (!socket || !examId) return undefined;
-    socket.emit('monitor:subscribe', { examId });
+
+    const subscribe = () => socket.emit('monitor:subscribe', { examId });
+
+    subscribe();
 
     const onOnline = (payload) => {
       if (payload.examId === examId) setOnline(payload.students || []);
@@ -52,22 +56,29 @@ export default function LiveMonitorPage() {
     };
     const onSubmitted = (payload) => {
       setEvents((prev) => [
-        { ...payload, at: new Date(), kind: 'submitted', studentName: 'Student' },
+        { ...payload, at: new Date(), kind: 'submitted', studentName: payload.studentName || 'Student' },
         ...prev.slice(0, 49),
       ]);
       refetch();
     };
+    const onMonitorError = (payload) => {
+      toast.error(payload?.message || 'Not authorized to monitor this exam');
+    };
 
+    socket.on('connect', subscribe);
     socket.on('students:online', onOnline);
     socket.on('student:warning', onWarning);
     socket.on('student:status', onStatus);
     socket.on('student:submitted', onSubmitted);
+    socket.on('monitor:error', onMonitorError);
 
     return () => {
+      socket.off('connect', subscribe);
       socket.off('students:online', onOnline);
       socket.off('student:warning', onWarning);
       socket.off('student:status', onStatus);
       socket.off('student:submitted', onSubmitted);
+      socket.off('monitor:error', onMonitorError);
     };
   }, [socket, examId, refetch]);
 
