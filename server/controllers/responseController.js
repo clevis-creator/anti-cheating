@@ -629,10 +629,10 @@ export const getPendingGrading = asyncHandler(async (req, res) => {
     .populate('exam', 'title')
     .sort('-submittedAt');
 
-  // Filter those needing manual attention
+  // Only expose submissions genuinely needing manual attention
   const pending = responses.filter((r) =>
     r.answers.some((a) => !a.autoGraded && !a.manuallyGraded && a.answer != null)
   );
 
-  sendSuccess(res, { responses: pending.length ? pending : responses });
+  sendSuccess(res, { responses: pending });
 });

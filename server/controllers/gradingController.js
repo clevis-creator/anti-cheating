@@ -184,6 +184,23 @@ export const publishResults = asyncHandler(async (req, res) => {
     throw new AppError('Not authorized', 403);
   }
 
+  // Guard: do not silently publish during in-progress manual grading.
+  const confirmIncomplete = req.body?.confirmIncomplete === true;
+  const gradedResponses = await Response.find({
+    exam: examId,
+    status: { $in: ['submitted', 'graded'] },
+  });
+  const pendingManual = gradedResponses.filter((r) =>
+    r.answers.some((a) => a.answer != null && !a.autoGraded && !a.manuallyGraded)
+  );
+
+  if (pendingManual.length > 0 && !confirmIncomplete) {
+    throw new AppError(
+      `${pendingManual.length} submission(s) still require manual grading. Publish anyway by passing confirmIncomplete=true.`,
+      400
+    );
+  }
+
   await Result.updateMany(
     { exam: examId },
     { published: true, publishedAt: new Date() }

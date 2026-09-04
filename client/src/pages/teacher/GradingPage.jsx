@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -12,6 +12,7 @@ export default function GradingPage() {
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [gradeForm, setGradeForm] = useState({ answerId: '', marksAwarded: 0, feedback: '' });
+  const publishAttemptRef = useRef(null);
 
   const { data: pending, isLoading } = useQuery({
     queryKey: ['pending-grading'],
@@ -63,14 +64,37 @@ export default function GradingPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const [publishConfirmId, setPublishConfirmId] = useState(null);
   const publishMut = useMutation({
-    mutationFn: (examId) => responsesAPI.publishResults(examId),
+    mutationFn: ({ examId, confirmIncomplete = false }) =>
+      responsesAPI.publishResults(examId, confirmIncomplete),
     onSuccess: () => {
       toast.success('Results published');
       qc.invalidateQueries({ queryKey: ['pending-grading'] });
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
+    onError: (e) => {
+      const msg = e?.response?.data?.message || '';
+      const attemptedExamId = publishAttemptRef.current;
+      if (/require manual grading/i.test(msg) && attemptedExamId) {
+        setPublishConfirmId(attemptedExamId);
+        return;
+      }
+      toast.error(getErrorMessage(e));
+    },
   });
+
+  const handlePublish = (examId) => {
+    publishAttemptRef.current = examId;
+    setPublishConfirmId(null);
+    publishMut.mutate({ examId, confirmIncomplete: false });
+  };
+
+  const confirmPublish = () => {
+    const examId = publishConfirmId;
+    if (!examId) return;
+    setPublishConfirmId(null);
+    publishMut.mutate({ examId, confirmIncomplete: true });
+  };
 
   return (
     <div>
@@ -94,7 +118,7 @@ export default function GradingPage() {
                 <Button size="sm" variant="secondary" onClick={() => loadDetail(r._id)}>
                   Review
                 </Button>
-                <Button size="sm" onClick={() => publishMut.mutate(r.exam?._id || r.exam)}>
+                <Button size="sm" onClick={() => handlePublish(r.exam?._id || r.exam)}>
                   Publish
                 </Button>
                 <Link to={`/teacher/monitor/${r.exam?._id || r.exam}`}>
@@ -230,6 +254,27 @@ export default function GradingPage() {
             })}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!publishConfirmId}
+        onClose={() => setPublishConfirmId(null)}
+        title="Publish with pending manual grades?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            One or more submissions still require manual grading. Publishing will expose the current
+            (partial) grades to students.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPublishConfirmId(null)}>
+              Cancel
+            </Button>
+            <Button loading={publishMut.isPending} onClick={confirmPublish}>
+              Publish anyway
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

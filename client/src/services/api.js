@@ -111,7 +111,8 @@ export const responsesAPI = {
   grade: (id, data) => api.post(`/responses/${id}/grade`, data),
   regradeAI: (id, answerId) => api.post(`/responses/${id}/regrade-ai`, { answerId }),
   overrideAI: (id, data) => api.put(`/responses/ai-grades/${id}/override`, data),
-  publishResults: (examId) => api.post(`/responses/exam/${examId}/publish`),
+  publishResults: (examId, confirmIncomplete = false) =>
+    api.post(`/responses/exam/${examId}/publish`, { confirmIncomplete }),
   results: (params) => api.get('/responses/results', { params }),
   result: (id) => api.get(`/responses/results/${id}`),
   certificate: (id) => api.get(`/responses/results/${id}/certificate`),
