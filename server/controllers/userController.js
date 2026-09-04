@@ -65,7 +65,12 @@ export const createUser = asyncHandler(async (req, res) => {
 
   if (await User.findOne({ email })) throw new AppError('Email already exists', 400);
 
-  if (role === 'student') {
+  // Teachers can only create student accounts
+  const allowedRole = req.user.role === 'admin'
+    ? (['admin', 'teacher', 'student'].includes(role) ? role : 'student')
+    : 'student';
+
+  if (allowedRole === 'student') {
     await assertStudentEnrollmentAllowed();
   }
 
@@ -74,7 +79,7 @@ export const createUser = asyncHandler(async (req, res) => {
     lastName,
     email,
     password: password || 'ChangeMe123!',
-    role,
+    role: allowedRole,
     institution,
     department,
     studentId,
@@ -88,7 +93,7 @@ export const createUser = asyncHandler(async (req, res) => {
     action: 'create_user',
     resource: 'user',
     resourceId: user._id,
-    details: `Created ${role}: ${email}`,
+    details: `Created ${allowedRole}: ${email}`,
     ipAddress: req.ip,
   });
 

@@ -3,9 +3,20 @@ import config from '../config/index.js';
 
 let transporter = null;
 
+let warnedMissing = false;
+
 const getTransporter = () => {
   if (transporter) return transporter;
-  if (!config.email.user || !config.email.pass) return null;
+  if (!config.email.user || !config.email.pass) {
+    if (!warnedMissing) {
+      warnedMissing = true;
+      console.warn(
+        '[Email] SMTP credentials not configured — emails will NOT be delivered.\n' +
+        '  Set EMAIL_USER and EMAIL_PASS environment variables (see .env.example).'
+      );
+    }
+    return null;
+  }
 
   transporter = nodemailer.createTransport({
     host: config.email.host,

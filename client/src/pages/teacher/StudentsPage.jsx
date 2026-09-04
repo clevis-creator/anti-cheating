@@ -1,8 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { Plus } from 'lucide-react';
 import { usersAPI, coursesAPI } from '../../services/api';
-import { PageHeader, Card, Skeleton, Badge } from '../../components/ui';
+import { PageHeader, Card, Skeleton, Badge, Button, Input, Modal } from '../../components/ui';
+import { getErrorMessage } from '../../utils/helpers';
+
+const emptyForm = { firstName: '', lastName: '', email: '', password: '', studentId: '' };
 
 export default function StudentsPage() {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+
   const { data: students, isLoading } = useQuery({
     queryKey: ['students'],
     queryFn: async () => (await usersAPI.list({ role: 'student' })).data.data.users,
@@ -13,9 +23,37 @@ export default function StudentsPage() {
     queryFn: async () => (await coursesAPI.list()).data.data.courses,
   });
 
+  const createMut = useMutation({
+    mutationFn: (data) => usersAPI.create(data),
+    onSuccess: () => {
+      toast.success('Student created');
+      setShowForm(false);
+      setForm(emptyForm);
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.firstName || !form.lastName || !form.email) {
+      toast.error('First name, last name, and email are required');
+      return;
+    }
+    createMut.mutate({ ...form, role: 'student' });
+  };
+
   return (
     <div>
-      <PageHeader title="Students" subtitle="Students in your courses and institution" />
+      <PageHeader
+        title="Students"
+        subtitle="Students in your courses and institution"
+        actions={
+          <Button onClick={() => setShowForm(true)}>
+            <Plus size={16} /> Add Student
+          </Button>
+        }
+      />
       <div className="mb-4 flex flex-wrap gap-2">
         {(courses || []).map((c) => (
           <Badge key={c._id}>
@@ -53,8 +91,56 @@ export default function StudentsPage() {
               ))}
             </tbody>
           </table>
+          {!students?.length && (
+            <p className="py-10 text-center text-slate-500">No students found. Add a student to get started.</p>
+          )}
         </Card>
       )}
+
+      <Modal open={showForm} onClose={() => setShowForm(false)} title="Add Student">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="First name"
+              value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              required
+            />
+            <Input
+              label="Last name"
+              value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              required
+            />
+          </div>
+          <Input
+            label="Email"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            required
+          />
+          <Input
+            label="Password (optional — default: ChangeMe123!)"
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+          <Input
+            label="Student ID (optional)"
+            value={form.studentId}
+            onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMut.isPending}>
+              Create Student
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

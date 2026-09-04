@@ -18,7 +18,7 @@ router.get('/stats', authorize('admin'), getDashboardStats);
 router.get('/audit-logs', authorize('admin'), getAuditLogs);
 router.get('/', authorize('admin', 'teacher'), getUsers);
 router.get('/:id', authorize('admin', 'teacher'), getUser);
-router.post('/', authorize('admin'), createUser);
+router.post('/', authorize('admin', 'teacher'), createUser);
 router.put('/:id', authorize('admin'), updateUser);
 router.delete('/:id', authorize('admin'), deleteUser);
 
