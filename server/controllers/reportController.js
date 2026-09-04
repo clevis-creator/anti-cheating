@@ -129,7 +129,6 @@ export const exportReport = asyncHandler(async (req, res) => {
       'student',
       'firstName lastName email studentId'
     );
-    const exam = await Exam.findById(examId);
     title = `Exam Report - ${exam?.title || examId}`;
     rows = results.map((r) => ({
       Student: `${r.student.firstName} ${r.student.lastName}`,
