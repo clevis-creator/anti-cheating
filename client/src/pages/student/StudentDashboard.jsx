@@ -2,10 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ClipboardList, Award, Clock, BarChart3 } from 'lucide-react';
 import { responsesAPI, examsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader, StatCard, Card, Button, Skeleton } from '../../components/ui';
 import { formatDate } from '../../utils/helpers';
 
 export default function StudentDashboard() {
+  const { mustVerifyEmailBeforeExam } = useAuth();
   const { data: stats, isLoading } = useQuery({
     queryKey: ['student-stats'],
     queryFn: async () => (await responsesAPI.studentStats()).data.data,
@@ -57,9 +59,15 @@ export default function StudentDashboard() {
                   {exam.duration} min · {exam.totalMarks} marks · Due {formatDate(exam.endTime)}
                 </p>
               </div>
-              <Link to={`/student/exams/${exam._id}/take`}>
-                <Button size="sm">Start</Button>
-              </Link>
+              {mustVerifyEmailBeforeExam ? (
+                <Button size="sm" variant="secondary" disabled>
+                  Verify email to start
+                </Button>
+              ) : (
+                <Link to={`/student/exams/${exam._id}/take`}>
+                  <Button size="sm">Start</Button>
+                </Link>
+              )}
             </div>
           ))}
           {!exams?.length && <p className="py-8 text-center text-sm text-slate-500">No exams available</p>}

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Flag, ChevronLeft, ChevronRight, Send, AlertTriangle } from 'lucide-react';
 import { responsesAPI, setExamSessionToken, clearExamSessionToken, examsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useAntiCheat } from '../../hooks/useAntiCheat';
 import { Button, Card, Badge } from '../../components/ui';
@@ -13,6 +14,7 @@ export default function TakeExamPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
   const { socket } = useSocket();
+  const { mustVerifyEmailBeforeExam } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [exam, setExam] = useState(null);
@@ -28,6 +30,7 @@ export default function TakeExamPage() {
   const [accessCode, setAccessCode] = useState('');
   const [needsAccessCode, setNeedsAccessCode] = useState(false);
   const [requiresSEB, setRequiresSEB] = useState(false);
+  const [preview, setPreview] = useState(null);
 
   const answersRef = useRef(answers);
   const responseRef = useRef(response);
@@ -53,7 +56,7 @@ export default function TakeExamPage() {
   }, [flagged]);
 
   const antiCheatEnabled = exam?.settings?.antiCheat?.enabled !== false;
-  const maxWarnings = exam?.settings?.antiCheat?.maxWarnings || 3;
+  const maxWarnings = exam?.settings?.antiCheat?.maxWarnings ?? preview?.settings?.antiCheat?.maxWarnings ?? 3;
 
   const logActivity = useCallback(async (action, details = '') => {
     const res = responseRef.current;
@@ -257,6 +260,7 @@ export default function TakeExamPage() {
       .get(examId)
       .then(({ data }) => {
         const ex = data.data.exam;
+        setPreview(ex);
         setNeedsAccessCode(!!ex?.accessCode?.trim());
         setRequiresSEB(!!ex?.settings?.requireSEB);
       })
@@ -399,7 +403,22 @@ export default function TakeExamPage() {
     return (
       <div className="mx-auto max-w-2xl py-10">
         <Card>
-          <h1 className="text-2xl font-semibold">Ready to begin?</h1>
+          <h1 className="text-2xl font-semibold">{preview?.title || 'Exam'}</h1>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+            {preview?.duration && <Badge variant="info">{preview.duration} minutes</Badge>}
+            {Array.isArray(preview?.questions) && (
+              <Badge variant="info">{preview.questions.length} questions</Badge>
+            )}
+            {typeof preview?.totalMarks === 'number' && (
+              <Badge variant="info">{preview.totalMarks} marks</Badge>
+            )}
+            {typeof preview?.passingMarks === 'number' && (
+              <Badge variant="info">Passing: {preview.passingMarks}</Badge>
+            )}
+          </div>
+          {preview?.description && (
+            <p className="mt-3 text-sm text-slate-500">{preview.description}</p>
+          )}
           <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
             This exam uses secure browser mode. Switching tabs, exiting fullscreen, or using
             copy/paste will trigger warnings. After {maxWarnings} warnings the exam auto-submits.
@@ -408,10 +427,19 @@ export default function TakeExamPage() {
             <li>Ensure a stable internet connection</li>
             <li>Close other applications and browser tabs</li>
             <li>Your progress autosaves every 20 seconds</li>
+            {preview?.settings?.requireFullscreen && (
+              <li>Fullscreen is required for this exam</li>
+            )}
             {requiresSEB && (
               <li className="font-medium text-amber-700">This exam requires Safe Exam Browser (SEB)</li>
             )}
           </ul>
+          {mustVerifyEmailBeforeExam && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+              Please verify your email before starting an exam. Check your inbox for the
+              verification link, then refresh this page.
+            </div>
+          )}
           {needsAccessCode && (
             <div className="mt-4">
               <label className="text-sm font-medium">Exam access code</label>
@@ -424,7 +452,12 @@ export default function TakeExamPage() {
               />
             </div>
           )}
-          <Button className="mt-6" onClick={startExam} loading={loading}>
+          <Button
+            className="mt-6"
+            onClick={startExam}
+            loading={loading}
+            disabled={mustVerifyEmailBeforeExam}
+          >
             Start exam
           </Button>
           {showConsent && (

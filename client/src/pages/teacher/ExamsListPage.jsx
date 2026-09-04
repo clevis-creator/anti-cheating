@@ -22,6 +22,14 @@ export default function ExamsListPage({ basePath = '/teacher' }) {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const handlePublish = (exam) => {
+    const isOpenToAll = !exam.assignedStudents?.length;
+    const message = isOpenToAll
+      ? 'This exam has no specific students assigned and will be available to ALL active students. Publish this exam?'
+      : 'Publish this exam to the assigned students?';
+    if (confirm(message)) publishMut.mutate(exam._id);
+  };
+
   const dupMut = useMutation({
     mutationFn: (id) => examsAPI.duplicate(id),
     onSuccess: () => {
@@ -98,7 +106,7 @@ export default function ExamsListPage({ basePath = '/teacher' }) {
                   </Link>
                 )}
                 {exam.status === 'draft' && (
-                  <Button size="sm" onClick={() => publishMut.mutate(exam._id)}>
+                  <Button size="sm" onClick={() => handlePublish(exam)}>
                     Publish
                   </Button>
                 )}

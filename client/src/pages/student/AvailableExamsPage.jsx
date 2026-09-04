@@ -35,15 +35,20 @@ export default function AvailableExamsPage() {
                 <p>Passing: {exam.passingMarks}</p>
                 <p>Ends: {formatDateTime(exam.endTime)}</p>
               </div>
-              <Link
-                to={mustVerifyEmailBeforeExam ? '#' : `/student/exams/${exam._id}/take`}
-                className="mt-4 inline-block"
-                onClick={(e) => mustVerifyEmailBeforeExam && e.preventDefault()}
-              >
-                <Button disabled={mustVerifyEmailBeforeExam}>
-                  {mustVerifyEmailBeforeExam ? 'Verify email to start' : 'Take exam'}
-                </Button>
-              </Link>
+              {mustVerifyEmailBeforeExam ? (
+                <div className="mt-4">
+                  <Button disabled variant="secondary" className="w-full">
+                    Verify email to start
+                  </Button>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Check your inbox for the verification link, or use <span className="font-medium">Resend email</span> above.
+                  </p>
+                </div>
+              ) : (
+                <Link to={`/student/exams/${exam._id}/take`} className="mt-4 inline-block">
+                  <Button>Take exam</Button>
+                </Link>
+              )}
             </Card>
           ))}
           {!exams?.length && (

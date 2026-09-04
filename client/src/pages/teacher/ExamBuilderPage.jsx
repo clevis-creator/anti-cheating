@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -20,7 +20,8 @@ import {
   Card,
   Badge,
 } from '../../components/ui';
-import { getErrorMessage, questionTypeLabel } from '../../utils/helpers';
+import { cn, getErrorMessage, questionTypeLabel } from '../../utils/helpers';
+import StudentPicker from '../../components/StudentPicker';
 
 const QUESTION_TYPES = [
   'multiple_choice',
@@ -108,6 +109,7 @@ export default function ExamBuilderPage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [examId, setExamId] = useState(isNew ? null : id);
   const [dragIndex, setDragIndex] = useState(null);
+  const [specificMode, setSpecificMode] = useState(isNew ? true : false);
 
   const { data: courses } = useQuery({
     queryKey: ['courses'],
@@ -118,6 +120,14 @@ export default function ExamBuilderPage() {
     queryKey: ['students'],
     queryFn: async () => (await usersAPI.list({ role: 'student' })).data.data.users,
   });
+
+  const searchStudents = useCallback(
+    async (q) => {
+      const { data } = await usersAPI.list({ role: 'student', search: q, limit: 50 });
+      return data.data.users;
+    },
+    []
+  );
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['exam', id],
@@ -145,6 +155,7 @@ export default function ExamBuilderPage() {
       });
       setQuestions(existing.questions || []);
       setExamId(existing._id);
+      setSpecificMode((existing.assignedStudents || []).length > 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing]);
@@ -399,25 +410,72 @@ export default function ExamBuilderPage() {
                   ))}
                 </Select>
               </div>
-              <div className="sm:col-span-2">
-                <Select
-                  label="Assign students"
-                  value={exam.assignedStudents}
-                  multiple
-                  onChange={(e) =>
-                    setExam({
-                      ...exam,
-                      assignedStudents: Array.from(e.target.selectedOptions, (option) => option.value),
-                    })
-                  }
-                >
-                  {(students || []).map((student) => (
-                    <option key={student._id} value={student._id}>
-                      {student.firstName} {student.lastName} — {student.email}
-                    </option>
-                  ))}
-                </Select>
-                <p className="mt-2 text-xs text-slate-500">Leave empty to make the exam available to all active students.</p>
+              <div className="sm:col-span-2 space-y-3">
+                <div>
+                  <p className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Availability
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <label
+                      className={cn(
+                        'flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition',
+                        specificMode
+                          ? 'border-brand-600 bg-brand-50 dark:bg-brand-950'
+                          : 'border-slate-200 dark:border-slate-700'
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="availability"
+                        value="specific"
+                        checked={specificMode}
+                        onChange={() => setSpecificMode(true)}
+                        className="h-4 w-4 text-brand-700 focus:ring-brand-500"
+                      />
+                      <span>
+                        <span className="font-medium">Specific students</span>
+                        <span className="block text-xs text-slate-500">
+                          Only the students you select can take this exam
+                        </span>
+                      </span>
+                    </label>
+                    <label
+                      className={cn(
+                        'flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition',
+                        !specificMode
+                          ? 'border-brand-600 bg-brand-50 dark:bg-brand-950'
+                          : 'border-slate-200 dark:border-slate-700'
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="availability"
+                        value="all"
+                        checked={!specificMode}
+                        onChange={() => {
+                          setExam({ ...exam, assignedStudents: [] });
+                          setSpecificMode(false);
+                        }}
+                        className="h-4 w-4 text-brand-700 focus:ring-brand-500"
+                      />
+                      <span>
+                        <span className="font-medium">All eligible students</span>
+                        <span className="block text-xs text-slate-500">
+                          Every active student on the platform can take this exam
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {specificMode && (
+                  <StudentPicker
+                    students={students || []}
+                    value={exam.assignedStudents}
+                    onChange={(ids) => setExam({ ...exam, assignedStudents: ids })}
+                    searchStudents={searchStudents}
+                  />
+                )}
               </div>
               {!!assignmentData?.assignments?.length && (
                 <div className="sm:col-span-2">
