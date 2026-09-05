@@ -42,7 +42,15 @@ export const register = asyncHandler(async (req, res) => {
 
   const verifyToken = user.createEmailVerificationToken();
   await user.save({ validateBeforeSave: false });
-  await sendVerificationEmail(user, verifyToken);
+
+  let emailSent = false;
+  try {
+    const emailResult = await sendVerificationEmail(user, verifyToken);
+    emailSent = !(emailResult && emailResult.skipped);
+  } catch {
+    // Logged by sendEmail; registration still succeeds because the account exists.
+    emailSent = false;
+  }
 
   await Notification.create({
     recipient: user._id,
@@ -62,7 +70,9 @@ export const register = asyncHandler(async (req, res) => {
         role: user.role,
       },
     },
-    'Registration successful. Please verify your email.',
+    emailSent
+      ? 'Registration successful. Please verify your email.'
+      : 'Your account was created, but we could not send the verification email. Please try again or contact the administrator.',
     201
   );
 });
@@ -166,9 +176,22 @@ export const resendVerification = asyncHandler(async (req, res) => {
 
   const token = user.createEmailVerificationToken();
   await user.save({ validateBeforeSave: false });
-  await sendVerificationEmail(user, token);
 
-  sendSuccess(res, null, 'Verification email sent');
+  let emailSent = false;
+  try {
+    const emailResult = await sendVerificationEmail(user, token);
+    emailSent = !(emailResult && emailResult.skipped);
+  } catch {
+    emailSent = false;
+  }
+
+  sendSuccess(
+    res,
+    null,
+    emailSent
+      ? 'Verification email sent'
+      : 'We could not send the verification email right now. Please try again later or contact the administrator.'
+  );
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {

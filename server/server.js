@@ -20,6 +20,7 @@ import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { initSocket } from './socket/index.js';
 import securityHeaders from './middleware/securityHeaders.js';
 import { startCleanupScheduler } from './utils/cleanupUploads.js';
+import { getEmailConfigStatus } from './utils/email.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,6 +175,12 @@ const start = async () => {
     startCleanupScheduler();
     server.listen(config.port, '0.0.0.0', () => {
       console.log(`ExamAI server running at http://0.0.0.0:${config.port} [${config.nodeEnv}]`);
+      const emailStatus = getEmailConfigStatus();
+      console.log(
+        `[Email] ${emailStatus.nodeEnv} | host=${emailStatus.host}:${emailStatus.port} ` +
+        `secure=${emailStatus.secure} | user=${emailStatus.user} pass=${emailStatus.pass} | ` +
+        `from=${emailStatus.from} | linksBase=${emailStatus.linksBase}`
+      );
     });
   } catch (err) {
     console.error('Failed to start server:', err.message);

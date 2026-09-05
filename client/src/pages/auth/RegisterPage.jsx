@@ -21,8 +21,8 @@ export default function RegisterPage() {
   const onSubmit = async (values) => {
     setLoading(true);
     try {
-      await registerUser(values);
-      toast.success('Account created! Check your email to verify, then sign in.');
+      const res = await registerUser(values);
+      toast.success(res?.message || 'Account created! Check your email to verify, then sign in.');
       navigate('/login');
     } catch (err) {
       toast.error(getErrorMessage(err));

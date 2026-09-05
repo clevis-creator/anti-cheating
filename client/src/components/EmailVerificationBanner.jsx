@@ -14,8 +14,8 @@ export default function EmailVerificationBanner() {
   const resend = async () => {
     setSending(true);
     try {
-      await authAPI.resendVerification(user.email);
-      toast.success('Verification email sent. Check your inbox.');
+      const res = await authAPI.resendVerification(user.email);
+      toast.success(res.data?.message || 'Verification email sent. Check your inbox.');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to resend verification email');
     } finally {

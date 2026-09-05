@@ -97,10 +97,17 @@ export const createUser = asyncHandler(async (req, res) => {
     mustChangePassword: usingDefaultPassword,
   });
 
+  let emailSent = false;
   if (allowedRole === 'student') {
     const verifyToken = user.createEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
-    await sendVerificationEmail(user, verifyToken);
+    try {
+      const emailResult = await sendVerificationEmail(user, verifyToken);
+      emailSent = !(emailResult && emailResult.skipped);
+    } catch {
+      // Logged by sendEmail; user creation still succeeds.
+      emailSent = false;
+    }
   }
 
   await ActivityLog.create({
@@ -121,7 +128,16 @@ export const createUser = asyncHandler(async (req, res) => {
     ...safeUser
   } = user.toJSON();
 
-  sendSuccess(res, { user: safeUser }, 'User created', 201);
+  sendSuccess(
+    res,
+    { user: safeUser },
+    allowedRole === 'student'
+      ? emailSent
+        ? 'User created. Verification email sent.'
+        : 'User created, but the verification email could not be sent. The student can request a resend after signing in, or contact the administrator.'
+      : 'User created',
+    201
+  );
 });
 
 export const updateUser = asyncHandler(async (req, res) => {

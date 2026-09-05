@@ -25,8 +25,8 @@ export default function StudentsPage() {
 
   const createMut = useMutation({
     mutationFn: (data) => usersAPI.create(data),
-    onSuccess: () => {
-      toast.success('Student created. A verification email has been sent.');
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || 'Student created');
       setShowForm(false);
       setForm(emptyForm);
       qc.invalidateQueries({ queryKey: ['students'] });

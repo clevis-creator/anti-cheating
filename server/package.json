@@ -10,6 +10,7 @@
     "seed": "node utils/seed.js",
     "db:check": "node utils/db-check.js",
     "env:check": "node utils/validate-env.js",
+    "smtp:check": "node ../tools/check-smtp.mjs",
     "migrate:run": "node utils/migrate.js",
     "seed:validate": "node utils/validate-seed.js",
     "integration:check": "node utils/integration-check.js",
