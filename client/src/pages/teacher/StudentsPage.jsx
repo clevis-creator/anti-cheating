@@ -26,7 +26,7 @@ export default function StudentsPage() {
   const createMut = useMutation({
     mutationFn: (data) => usersAPI.create(data),
     onSuccess: () => {
-      toast.success('Student created');
+      toast.success('Student created. A verification email has been sent.');
       setShowForm(false);
       setForm(emptyForm);
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -83,9 +83,16 @@ export default function StudentsPage() {
                   <td className="px-4 py-3 text-slate-500">{s.email}</td>
                   <td className="px-4 py-3">{s.studentId || '—'}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={s.isActive ? 'success' : 'danger'}>
-                      {s.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={s.isActive ? 'success' : 'danger'}>
+                        {s.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                      {s.role === 'student' && (
+                        <Badge variant={s.isEmailVerified ? 'success' : 'warning'}>
+                          {s.isEmailVerified ? 'Verified' : 'Unverified'}
+                        </Badge>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -131,6 +138,10 @@ export default function StudentsPage() {
             value={form.studentId}
             onChange={(e) => setForm({ ...form, studentId: e.target.value })}
           />
+          <p className="text-xs text-slate-500">
+            A verification email will be sent to this student. They must verify their email and set a
+            new password before taking exams.
+          </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
               Cancel

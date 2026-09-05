@@ -7,7 +7,7 @@ import { PageHeader, Card, Button, Input } from '../../components/ui';
 import { getErrorMessage } from '../../utils/helpers';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const { register, handleSubmit } = useForm({
     defaultValues: {
@@ -37,6 +37,7 @@ export default function ProfilePage() {
   const onPassword = async (values) => {
     try {
       await authAPI.changePassword(values);
+      await refreshUser();
       toast.success('Password changed');
       pwdForm.reset();
     } catch (e) {

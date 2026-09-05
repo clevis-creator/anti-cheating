@@ -15,7 +15,7 @@ export default function UsersPage() {
     firstName: '',
     lastName: '',
     email: '',
-    password: 'ChangeMe123!',
+    password: '',
     role: 'student',
   });
 
@@ -104,9 +104,16 @@ export default function UsersPage() {
                     <Badge variant="info">{u.role}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={u.isActive ? 'success' : 'danger'}>
-                      {u.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={u.isActive ? 'success' : 'danger'}>
+                        {u.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                      {u.role === 'student' && (
+                        <Badge variant={u.isEmailVerified ? 'success' : 'warning'}>
+                          {u.isEmailVerified ? 'Verified' : 'Unverified'}
+                        </Badge>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-3">
@@ -144,7 +151,8 @@ export default function UsersPage() {
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
           <Input
-            label="Password"
+            label="Password (optional — default: ChangeMe123!)"
+            type="password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
@@ -157,6 +165,11 @@ export default function UsersPage() {
             <option value="teacher">Teacher</option>
             <option value="admin">Admin</option>
           </Select>
+          <p className="text-xs text-slate-500">
+            Students are created unverified and receive a verification email. Teacher and admin
+            accounts are created here only. Accounts created with the default password will be
+            required to change it on first login.
+          </p>
           <Button
             className="w-full"
             loading={createMut.isPending}

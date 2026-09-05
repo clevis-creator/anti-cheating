@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { Button, Input, Select, Card } from '../../components/ui';
+import { Button, Input, Card } from '../../components/ui';
 import { getErrorMessage } from '../../utils/helpers';
 
 export default function RegisterPage() {
@@ -73,10 +73,17 @@ export default function RegisterPage() {
               })}
             />
           </div>
-          <Select id="role" label="I am a..." {...register('role')}>
-            <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
-          </Select>
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              I am a...
+            </label>
+            <p className="rounded-lg bg-mist/60 px-3 py-2.5 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Student
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Teacher accounts are created by administrators. Contact your institution to request one.
+            </p>
+          </div>
           <Input id="institution" label="Institution" {...register('institution')} />
           <div className="sm:col-span-2">
             <Button type="submit" className="w-full" loading={loading}>

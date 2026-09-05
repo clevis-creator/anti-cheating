@@ -38,6 +38,10 @@ export const requireVerifiedEmail = asyncHandler(async (req, _res, next) => {
     throw new AppError('Please verify your email before taking exams.', 403);
   }
 
+  if (req.user.mustChangePassword) {
+    throw new AppError('Please set a new password before taking exams.', 403);
+  }
+
   next();
 });
 

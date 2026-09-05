@@ -59,4 +59,8 @@ if (config.nodeEnv === 'production' && (!process.env.MEDIA_SIGN_SECRET || proces
   throw new Error('Production requires MEDIA_SIGN_SECRET to be explicitly set.');
 }
 
+if (config.nodeEnv === 'production' && !process.env.CLIENT_URL) {
+  throw new Error('Production requires CLIENT_URL to be set to the deployed frontend origin (email verification and reset links depend on it).');
+}
+
 export default config;

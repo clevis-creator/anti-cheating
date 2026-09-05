@@ -53,7 +53,8 @@ export default function StudentPicker({
       return students.filter(
         (s) =>
           `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
-          (s.email || '').toLowerCase().includes(q)
+          (s.email || '').toLowerCase().includes(q) ||
+          (s.studentId || '').toLowerCase().includes(q)
       );
     }
     return [];

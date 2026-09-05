@@ -17,8 +17,13 @@ export const register = asyncHandler(async (req, res) => {
   const exists = await User.findOne({ email });
   if (exists) throw new AppError('Email already registered', 400);
 
-  // Only admins can create admin/teacher accounts via this public route defaults to student
-  const allowedRole = ['student', 'teacher'].includes(role) ? role : 'student';
+  // Public self-registration is for students only.
+  // Teacher and admin accounts are provisioned by administrators (POST /users).
+  if (role && role !== 'student') {
+    throw new AppError('Teacher and admin accounts must be created by an administrator.', 403);
+  }
+
+  const allowedRole = 'student';
 
   if (allowedRole === 'student') {
     await assertStudentEnrollmentAllowed();
@@ -97,6 +102,7 @@ export const login = asyncHandler(async (req, res) => {
       role: user.role,
       avatar: user.avatar,
       isEmailVerified: user.isEmailVerified,
+      mustChangePassword: user.mustChangePassword,
       institution: user.institution,
     },
   }, 'Login successful');
@@ -131,6 +137,7 @@ export const changePassword = asyncHandler(async (req, res) => {
   }
 
   user.password = newPassword;
+  user.mustChangePassword = false;
   await user.save();
   sendSuccess(res, null, 'Password changed successfully');
 });
@@ -188,6 +195,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   if (!user) throw new AppError('Invalid or expired reset token', 400);
 
   user.password = req.body.password;
+  user.mustChangePassword = false;
   user.resetPasswordToken = undefined;
   user.resetPasswordExpire = undefined;
   await user.save();

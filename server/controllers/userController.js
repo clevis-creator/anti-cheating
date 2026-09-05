@@ -15,6 +15,7 @@ export const getUsers = asyncHandler(async (req, res) => {
       { firstName: new RegExp(search, 'i') },
       { lastName: new RegExp(search, 'i') },
       { email: new RegExp(search, 'i') },
+      { studentId: new RegExp(search, 'i') },
     ];
   }
 
@@ -74,6 +75,10 @@ export const createUser = asyncHandler(async (req, res) => {
     await assertStudentEnrollmentAllowed();
   }
 
+  // Students are created unverified: a verification email is sent on creation.
+  // Verified state is only granted via the email verification flow (or seeding).
+  const usingDefaultPassword = !password || password === 'ChangeMe123!';
+
   const user = await User.create({
     firstName,
     lastName,
@@ -85,8 +90,15 @@ export const createUser = asyncHandler(async (req, res) => {
     studentId,
     teacherId,
     createdBy: req.user._id,
-    isEmailVerified: true,
+    isEmailVerified: allowedRole !== 'student',
+    mustChangePassword: usingDefaultPassword,
   });
+
+  if (allowedRole === 'student') {
+    const verifyToken = user.createEmailVerificationToken();
+    await user.save({ validateBeforeSave: false });
+    await sendVerificationEmail(user, verifyToken);
+  }
 
   await ActivityLog.create({
     user: req.user._id,
@@ -97,7 +109,16 @@ export const createUser = asyncHandler(async (req, res) => {
     ipAddress: req.ip,
   });
 
-  sendSuccess(res, { user }, 'User created', 201);
+  const {
+    password: _pw,
+    emailVerificationToken: _evt,
+    emailVerificationExpire: _eve,
+    resetPasswordToken: _rpt,
+    resetPasswordExpire: _rpe,
+    ...safeUser
+  } = user.toJSON();
+
+  sendSuccess(res, { user: safeUser }, 'User created', 201);
 });
 
 export const updateUser = asyncHandler(async (req, res) => {

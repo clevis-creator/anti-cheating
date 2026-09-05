@@ -23,6 +23,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(values.email, values.password);
+      if (user.mustChangePassword) {
+        toast('Please set a new password before continuing.');
+        navigate(`/${user.role}/profile`, { replace: true });
+        return;
+      }
       toast.success(`Welcome back, ${user.firstName}!`);
       const dest = location.state?.from?.pathname || roleHome(user.role);
       navigate(dest, { replace: true });

@@ -23,6 +23,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { notificationsAPI } from '../services/api';
 import { cn } from '../utils/helpers';
 import EmailVerificationBanner from '../components/EmailVerificationBanner';
+import MustChangePasswordBanner from '../components/MustChangePasswordBanner';
 
 const navByRole = {
   admin: [
@@ -186,6 +187,7 @@ export default function DashboardLayout() {
 
         <main className="flex-1 overflow-auto p-4 sm:p-6">
           <EmailVerificationBanner />
+          <MustChangePasswordBanner />
           <Outlet />
         </main>
       </div>

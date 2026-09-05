@@ -22,6 +22,7 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, default: '' },
     phone: { type: String, default: '' },
     isEmailVerified: { type: Boolean, default: false },
+    mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     emailVerificationToken: String,
     emailVerificationExpire: Date,
