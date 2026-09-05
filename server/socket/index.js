@@ -63,6 +63,11 @@ export const initSocket = (io) => {
           return;
         }
 
+        if (requireVerified && user.mustChangePassword) {
+          socket.emit('exam:error', { message: 'Please set a new password before taking exams.' });
+          return;
+        }
+
         const exam = await Exam.findById(examId).select('assignedStudents status');
         if (!exam || !['published', 'active'].includes(exam.status)) {
           socket.emit('exam:error', { message: 'Exam is not available' });

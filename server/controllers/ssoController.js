@@ -1,10 +1,15 @@
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 
 export const ssoRedirect = asyncHandler(async (req, res) => {
-  // Placeholder: redirect to identity provider
+  // Only allow internal (relative) redirects to prevent open-redirect abuse.
+  // Absolute URLs and protocol-relative URLs ("//evil.com") are rejected.
   const returnUrl = req.query.return || '/';
-  // In production, build auth request (OIDC) and redirect
-  res.redirect(returnUrl);
+  const isSafeRelative =
+    typeof returnUrl === 'string' &&
+    returnUrl.startsWith('/') &&
+    !returnUrl.startsWith('//') &&
+    !returnUrl.startsWith('/\\');
+  res.redirect(isSafeRelative ? returnUrl : '/');
 });
 
 export const ssoCallback = asyncHandler(async (req, res) => {

@@ -14,6 +14,7 @@ import {
   assertStudentExamAccess,
   assertAccessCode,
 } from '../utils/examAccess.js';
+import { sanitizeAIGradesForStudent } from '../utils/examSanitize.js';
 import { assertSEBIfRequired, isSEBRequest } from '../middleware/sebVerify.js';
 import {
   buildSessionFingerprint,
@@ -595,7 +596,10 @@ export const getResponse = asyncHandler(async (req, res) => {
         return safe;
       });
     }
-    return sendSuccess(res, { response: responseObj, aiGrades });
+    return sendSuccess(res, {
+      response: responseObj,
+      aiGrades: sanitizeAIGradesForStudent(aiGrades),
+    });
   }
 
   sendSuccess(res, { response, aiGrades });

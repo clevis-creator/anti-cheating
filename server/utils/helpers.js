@@ -18,4 +18,8 @@ export const sendError = (res, message = 'Error', statusCode = 500, errors = nul
   res.status(statusCode).json({ success: false, message, errors });
 };
 
+/** Escape user input before interpolating it into a RegExp constructor. */
+export const escapeRegex = (input) =>
+  String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export default AppError;

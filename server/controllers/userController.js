@@ -3,6 +3,7 @@ import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 import { getTeacherStudentIds } from '../utils/teacherAccess.js';
 import { sendVerificationEmail } from '../utils/email.js';
 import { assertStudentEnrollmentAllowed } from '../utils/platformLimits.js';
+import { escapeRegex } from '../utils/helpers.js';
 
 export const getUsers = asyncHandler(async (req, res) => {
   const { role, search, page = 1, limit = 20, isActive } = req.query;
@@ -11,17 +12,19 @@ export const getUsers = asyncHandler(async (req, res) => {
   if (role) filter.role = role;
   if (isActive !== undefined) filter.isActive = isActive === 'true';
   if (search) {
+    const safeSearch = escapeRegex(search);
     filter.$or = [
-      { firstName: new RegExp(search, 'i') },
-      { lastName: new RegExp(search, 'i') },
-      { email: new RegExp(search, 'i') },
-      { studentId: new RegExp(search, 'i') },
+      { firstName: new RegExp(safeSearch, 'i') },
+      { lastName: new RegExp(safeSearch, 'i') },
+      { email: new RegExp(safeSearch, 'i') },
+      { studentId: new RegExp(safeSearch, 'i') },
     ];
   }
 
   if (req.user.role === 'teacher') {
     const studentIds = await getTeacherStudentIds(req.user._id);
-    filter.role = role || 'student';
+    // Teachers may only ever scope to student accounts.
+    filter.role = 'student';
     filter.$and = [
       ...(filter.$and || []),
       {

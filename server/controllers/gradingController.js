@@ -10,6 +10,7 @@ import { calculateLetterGrade } from '../services/grading.js';
 import { gradeEssayWithAI } from '../services/aiGrading.js';
 import { generateCertificate } from '../services/certificate.js';
 import { assertTeacherExamAccess, studentVisibleExamFilter } from '../utils/examAccess.js';
+import { sanitizeAIGradesForStudent } from '../utils/examSanitize.js';
 import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
 
 export const manualGrade = asyncHandler(async (req, res) => {
@@ -323,7 +324,8 @@ export const getResult = asyncHandler(async (req, res) => {
     assertTeacherExamAccess(req.user, result.exam);
   }
 
-  const aiGrades = await AIGrade.find({ response: result.response?._id });
+  let aiGrades = await AIGrade.find({ response: result.response?._id });
+  if (req.user.role === 'student') aiGrades = sanitizeAIGradesForStudent(aiGrades);
   if (req.user.role === 'student' && !result.exam.settings?.showCorrectAnswers) {
     result.response.answers.forEach((answer) => {
       const question = answer.question;

@@ -9,7 +9,7 @@ import {
   assertAssignableStudents,
   assertCourseTeacherAccess,
 } from '../utils/teacherAccess.js';
-import AppError, { asyncHandler, sendSuccess } from '../utils/helpers.js';
+import AppError, { asyncHandler, sendSuccess, escapeRegex } from '../utils/helpers.js';
 import { sanitizeExamForStudent } from '../utils/examSanitize.js';
 
 async function validateExamWritePayload(user, body = {}) {
@@ -42,7 +42,7 @@ export const getExams = asyncHandler(async (req, res) => {
 
   if (req.query.status) filter.status = req.query.status;
   if (req.query.course) filter.course = req.query.course;
-  if (req.query.search) filter.title = new RegExp(req.query.search, 'i');
+  if (req.query.search) filter.title = new RegExp(escapeRegex(req.query.search), 'i');
 
   let query = Exam.find(filter)
     .populate('course', 'title code')

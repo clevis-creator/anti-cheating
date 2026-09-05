@@ -14,7 +14,8 @@ export default function TakeExamPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
   const { socket } = useSocket();
-  const { mustVerifyEmailBeforeExam } = useAuth();
+  const { mustVerifyEmailBeforeExam, user } = useAuth();
+  const mustChangePasswordBeforeExam = Boolean(user?.mustChangePassword);
 
   const [loading, setLoading] = useState(true);
   const [exam, setExam] = useState(null);
@@ -440,6 +441,12 @@ export default function TakeExamPage() {
               verification link, then refresh this page.
             </div>
           )}
+          {mustChangePasswordBeforeExam && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+              Please set a new password before starting an exam. Update it from your profile
+              first.
+            </div>
+          )}
           {needsAccessCode && (
             <div className="mt-4">
               <label className="text-sm font-medium">Exam access code</label>
@@ -456,7 +463,7 @@ export default function TakeExamPage() {
             className="mt-6"
             onClick={startExam}
             loading={loading}
-            disabled={mustVerifyEmailBeforeExam}
+            disabled={mustVerifyEmailBeforeExam || mustChangePasswordBeforeExam}
           >
             Start exam
           </Button>

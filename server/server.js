@@ -51,10 +51,9 @@ const corsOptions = {
 
     const isConfiguredOrigin = configuredOrigins.includes(origin);
 
-    // Allow your Vercel production + preview/deployment URLs
-    const isVercelOrigin =
-      /^https:\/\/anti-cheating-[a-z0-9-]+\.vercel\.app$/i.test(origin) ||
-      /^https:\/\/anti-cheating-kappa\.vercel\.app$/i.test(origin);
+    // Production frontend origin only. Preview/deployment origins must be
+    // added explicitly via CLIENT_URL (comma-separated) — no wildcard trust.
+    const isVercelOrigin = /^https:\/\/anti-cheating-kappa\.vercel\.app$/i.test(origin);
 
     if (isLocalhostOrigin || isConfiguredOrigin || isVercelOrigin) {
       return callback(null, true);
