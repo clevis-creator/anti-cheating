@@ -23,7 +23,9 @@ const { testSmtpConnection } = await import('../server/utils/email.js');
 
 const r = await testSmtpConnection();
 
-console.log('[Email] SMTP connectivity check');
+console.log('[Email] connectivity check (provider: ' + r.provider + ')');
+console.log('  provider :', r.provider);
+console.log('  apiKey   :', r.apiKey);
 console.log('  status   :', r.status);
 console.log('  detail   :', r.detail);
 console.log('  host     :', r.host);

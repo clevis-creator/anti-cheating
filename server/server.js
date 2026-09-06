@@ -177,9 +177,10 @@ const start = async () => {
       console.log(`ExamAI server running at http://0.0.0.0:${config.port} [${config.nodeEnv}]`);
       const emailStatus = getEmailConfigStatus();
       console.log(
-        `[Email] ${emailStatus.nodeEnv} | host=${emailStatus.host}:${emailStatus.port} ` +
-        `secure=${emailStatus.secure} | user=${emailStatus.user} pass=${emailStatus.pass} | ` +
-        `from=${emailStatus.from} | linksBase=${emailStatus.linksBase}`
+        `[Email] ${emailStatus.nodeEnv} | provider=${emailStatus.provider} ` +
+        `| host=${emailStatus.host}:${emailStatus.port} ` +
+        `secure=${emailStatus.secure} | user=${emailStatus.user} pass=${emailStatus.pass} ` +
+        `apiKey=${emailStatus.apiKey} | from=${emailStatus.from} | linksBase=${emailStatus.linksBase}`
       );
     });
   } catch (err) {

@@ -7,27 +7,38 @@ let warnedMissing = false;
 
 // ---- Production-safe email diagnostics -------------------------------------
 // These helpers never return or log secrets: EMAIL_PASS, JWT, tokens.
-// EMAIL_USER / EMAIL_PASS are reported only as "set" or "missing". The link
-// base URL is safe to log because it is the public frontend origin that the
-// verification link points to.
+// EMAIL_USER / EMAIL_PASS / RESEND_API_KEY are reported only as "set" or
+// "missing". The link base URL is safe to log because it is the public
+// frontend origin that the verification link points to.
 
-export const getEmailConfigStatus = () => ({
-  nodeEnv: config.nodeEnv,
-  host: config.email.host || '(unset)',
-  port: config.email.port,
-  secure: config.email.port === 465,
-  user: config.email.user ? 'set' : 'missing',
-  pass: config.email.pass ? 'set' : 'missing',
-  from: config.email.from || '(unset)',
-  linksBase: config.clientUrl,
-});
+// Transport selection:
+//   EMAIL_PROVIDER=smtp    (default) Nodemailer on EMAIL_HOST/PORT/USER/PASS.
+//   EMAIL_PROVIDER=resend  HTTPS transactional API (works on Render/Vercel
+//                          without reachable SMTP ports). Uses RESEND_API_KEY.
+const selectedProvider = () => (config.email.provider === 'resend' ? 'resend' : 'smtp');
+
+export const getEmailConfigStatus = () => {
+  const provider = selectedProvider();
+  return {
+    nodeEnv: config.nodeEnv,
+    provider,
+    host: config.email.host || '(unset)',
+    port: config.email.port,
+    secure: config.email.port === 465,
+    user: config.email.user ? 'set' : 'missing',
+    pass: config.email.pass ? 'set' : 'missing',
+    apiKey: provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a',
+    from: config.email.from || '(unset)',
+    linksBase: config.clientUrl,
+  };
+};
 
 export const classifySmtpError = (err) => {
   const msg = (err && err.message) || String(err);
   if (/invalid login|authentication|credentials|username and password|535|534|5\.7\.8|5\.7\.9/i.test(msg)) {
     return 'auth-rejected';
   }
-  if (/connect|ECONN|ETIMEDOUT|EHOST|ESOCKET|TLS|STARTTLS/i.test(msg)) {
+  if (/connect|ECONN|ETIMEDOUT|EHOST|ESOCKET|TLS|STARTTLS|timeout|timed out/i.test(msg)) {
     return 'connection-failed';
   }
   if (/554|550|553|sender|recipient|rejected|spam|policy/i.test(msg)) {
@@ -36,8 +47,82 @@ export const classifySmtpError = (err) => {
   return 'unknown-error';
 };
 
+export const classifyApiError = (status) => {
+  if (status === 401 || status === 403) return 'auth-rejected';
+  if (status >= 500) return 'api-failed';
+  return 'message-rejected';
+};
+
+const sanitizeErrorDetail = (err) => {
+  const msg = (err && err.message) || String(err);
+  return msg.replace(/(pass(?:word)?\s*[:=]\s*)[^\s,;"']+/gi, '$1<redacted>').slice(0, 300);
+};
+
+const resendHeaders = () => ({
+  Authorization: `Bearer ${config.email.apiKey}`,
+  'Content-Type': 'application/json',
+});
+
+const API_TIMEOUT_MS = 15 * 1000;
+
+const sendViaApi = async ({ to, subject, html, text }) => {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: resendHeaders(),
+    body: JSON.stringify({ from: config.email.from, to: [to], subject, html, text }),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const err = new Error(`Provider API rejected request (HTTP ${res.status})`);
+    err.category = classifyApiError(res.status);
+    err.statusCode = res.status;
+    throw err;
+  }
+  const body = await res.json().catch(() => ({}));
+  return { messageId: body.id || 'n/a', provider: 'resend', response: `HTTP ${res.status}` };
+};
+
 export const testSmtpConnection = async () => {
   const status = getEmailConfigStatus();
+  if (selectedProvider() === 'resend') {
+    if (!config.email.apiKey) {
+      return {
+        ok: false,
+        status: 'config-missing',
+        detail: 'RESEND_API_KEY is missing — no provider API call attempted',
+        ...status,
+      };
+    }
+    try {
+      const res = await fetch('https://api.resend.com/domains', {
+        method: 'GET',
+        headers: resendHeaders(),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        return {
+          ok: true,
+          status: 'connection-ok',
+          detail: 'Provider API reachable and key accepted',
+          ...status,
+        };
+      }
+      return {
+        ok: false,
+        status: classifyApiError(res.status),
+        detail: `Provider API responded HTTP ${res.status}`,
+        ...status,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 'connection-failed',
+        detail: sanitizeErrorDetail(err),
+        ...status,
+      };
+    }
+  }
+
   const transport = getTransporter();
   if (!transport) {
     return {
@@ -65,11 +150,6 @@ export const testSmtpConnection = async () => {
   }
 };
 
-const sanitizeErrorDetail = (err) => {
-  const msg = (err && err.message) || String(err);
-  return msg.replace(/(pass(?:word)?\s*[:=]\s*)[^\s,;"']+/gi, '$1<redacted>').slice(0, 300);
-};
-
 const buildTransporter = () => {
   transporter = nodemailer.createTransport({
     host: config.email.host,
@@ -79,7 +159,11 @@ const buildTransporter = () => {
       user: config.email.user,
       pass: config.email.pass,
     },
+    connectionTimeout: 10 * 1000,
+    greetingTimeout: 10 * 1000,
+    socketTimeout: 20 * 1000,
   });
+
   return transporter;
 };
 
@@ -102,6 +186,29 @@ const getTransporter = () => {
 };
 
 export const sendEmail = async ({ to, subject, html, text }) => {
+  if (selectedProvider() === 'resend') {
+    if (!config.email.apiKey) {
+      console.error(
+        `[Email] SKIPPED — RESEND_API_KEY not configured | to=${to} | subject=${subject}`
+      );
+      return { skipped: true };
+    }
+    try {
+      const info = await sendViaApi({ to, subject, html, text });
+      console.log(
+        `[Email] provider accepted message (resend) | to=${to} | subject=${subject} | ` +
+        `messageId=${info.messageId} | status=${info.response}`
+      );
+      return info;
+    } catch (err) {
+      console.error(
+        `[Email] provider send FAILED | to=${to} | subject=${subject} | ` +
+        `category=${err.category || 'unknown-error'} | detail=${sanitizeErrorDetail(err)}`
+      );
+      throw err;
+    }
+  }
+
   const transport = getTransporter();
   if (!transport) {
     console.error(

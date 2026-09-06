@@ -4,6 +4,7 @@ import config from '../config/index.js';
 import {
   getEmailConfigStatus,
   classifySmtpError,
+  classifyApiError,
   sendEmail,
 } from '../utils/email.js';
 
@@ -17,6 +18,8 @@ test('getEmailConfigStatus reports masked config without exposing credentials', 
   assert.ok(['set', 'missing'].includes(s.pass), 'pass must be reported as set or missing');
   assert.equal(typeof s.from, 'string');
   assert.equal(typeof s.linksBase, 'string');
+  assert.ok(['smtp', 'resend'].includes(s.provider), 'provider must be smtp or resend');
+  assert.equal(s.apiKey, s.provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a');
   if (config.email.user) assert.equal(s.user, 'set');
   if (config.email.pass) assert.equal(s.pass, 'set');
 });
@@ -45,7 +48,21 @@ test('classifySmtpError distinguishes auth, connection, and message rejection', 
   assert.equal(classifySmtpError(new Error('something unrelated')), 'unknown-error');
 });
 
-test('sendEmail skips (returns skipped) when SMTP credentials are absent', { skip: Boolean(config.email.user && config.email.pass) }, async () => {
+test('classifyApiError maps provider HTTP statuses to truthful categories', () => {
+  assert.equal(classifyApiError(401), 'auth-rejected');
+  assert.equal(classifyApiError(403), 'auth-rejected');
+  assert.equal(classifyApiError(422), 'message-rejected');
+  assert.equal(classifyApiError(429), 'message-rejected');
+  assert.equal(classifyApiError(500), 'api-failed');
+  assert.equal(classifyApiError(502), 'api-failed');
+});
+
+const credsConfigured =
+  getEmailConfigStatus().provider === 'resend'
+    ? config.email.apiKey
+    : Boolean(config.email.user && config.email.pass);
+
+test('sendEmail skips (returns skipped) when the selected provider credentials are absent', { skip: credsConfigured }, async () => {
   const out = await sendEmail({ to: 'student@example.com', subject: 'test', html: '<p>x</p>' });
   assert.deepEqual(out, { skipped: true });
 });
