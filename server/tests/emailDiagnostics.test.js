@@ -5,6 +5,9 @@ import {
   getEmailConfigStatus,
   classifySmtpError,
   classifyApiError,
+  describeSmtpFailure,
+  smtpTransportOptions,
+  extractSenderAddress,
   sendEmail,
 } from '../utils/email.js';
 
@@ -55,6 +58,65 @@ test('classifyApiError maps provider HTTP statuses to truthful categories', () =
   assert.equal(classifyApiError(429), 'message-rejected');
   assert.equal(classifyApiError(500), 'api-failed');
   assert.equal(classifyApiError(502), 'api-failed');
+});
+
+test('smtpTransportOptions configure Gmail STARTTLS correctly (587, secure=false)', () => {
+  const o = smtpTransportOptions();
+  assert.equal(o.secure, false);
+  assert.equal(o.requireTLS, true, 'requireTLS must be mandatory on port 587');
+  assert.ok('user' in o.auth && 'pass' in o.auth, 'auth user/pass keys must be present');
+  assert.ok(o.connectionTimeout > 0 && o.socketTimeout > 0, 'timeouts must be bounded');
+});
+
+test('smtpTransportOptions uses implicit TLS on port 465 (requireTLS not needed)', () => {
+  const originalPort = config.email.port;
+  config.email.port = 465;
+  try {
+    const o = smtpTransportOptions();
+    assert.equal(o.secure, true);
+    assert.equal(o.requireTLS, false);
+  } finally {
+    config.email.port = originalPort;
+  }
+});
+
+test('describeSmtpFailure extracts structured Nodemailer fields safely', () => {
+  const timeoutErr = new Error('connect ETIMEDOUT');
+  timeoutErr.code = 'ETIMEDOUT';
+  let d = describeSmtpFailure(timeoutErr);
+  assert.equal(d.category, 'connection-failed');
+  assert.equal(d.code, 'ETIMEDOUT');
+  assert.equal(d.timeout, true);
+
+  const authErr = new Error('Invalid login');
+  authErr.code = 'EAUTH';
+  authErr.responseCode = 534;
+  authErr.response = '534-5.7.8 Please log in via your web browser';
+  authErr.command = 'AUTH PLAIN';
+  d = describeSmtpFailure(authErr);
+  assert.equal(d.category, 'auth-rejected');
+  assert.equal(d.responseCode, 534);
+  assert.equal(d.command, 'AUTH PLAIN');
+
+  const msgErr = new Error('Message rejected');
+  msgErr.responseCode = 550;
+  msgErr.response = '550 sender or recipient policy rejection';
+  d = describeSmtpFailure(msgErr);
+  assert.equal(d.category, 'message-rejected');
+});
+
+test('describeSmtpFailure redacts password-like content from responses', () => {
+  const err = new Error('x');
+  err.response = '550 pass=supersecret123 rejected';
+  const d = describeSmtpFailure(err);
+  assert.ok(!d.response.includes('supersecret123'));
+  assert.ok(d.response.includes('<redacted>'));
+});
+
+test('extractSenderAddress parses display-name envelope', () => {
+  assert.equal(extractSenderAddress('ExamAI <examai@gmail.com>'), 'examai@gmail.com');
+  assert.equal(extractSenderAddress('examai@gmail.com'), 'examai@gmail.com');
+  assert.equal(extractSenderAddress(''), '');
 });
 
 const credsConfigured =

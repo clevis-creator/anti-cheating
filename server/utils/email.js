@@ -5,6 +5,8 @@ let transporter = null;
 
 let warnedMissing = false;
 
+let warnedFromMismatch = false;
+
 // ---- Production-safe email diagnostics -------------------------------------
 // These helpers never return or log secrets: EMAIL_PASS, JWT, tokens.
 // EMAIL_USER / EMAIL_PASS / RESEND_API_KEY are reported only as "set" or
@@ -56,6 +58,35 @@ export const classifyApiError = (status) => {
 const sanitizeErrorDetail = (err) => {
   const msg = (err && err.message) || String(err);
   return msg.replace(/(pass(?:word)?\s*[:=]\s*)[^\s,;"']+/gi, '$1<redacted>').slice(0, 300);
+};
+
+// Structured, secret-safe SMTP failure diagnostics. Never logs EMAIL_PASS or
+// other secrets. Surfaces Nodemailer's own fields so an operator can tell
+// apart connection failure, TLS failure, timeout, authentication rejection,
+// sender/recipient rejection, and provider rejection.
+export const describeSmtpFailure = (err) => {
+  return {
+    category: classifySmtpError(err),
+    code: err && err.code ? String(err.code).slice(0, 60) : undefined,
+    responseCode: err && err.responseCode != null ? Number(err.responseCode) : undefined,
+    response: err && typeof err.response === 'string' ? sanitizeErrorDetail(String(err.response)) : '',
+    command: err && err.command ? String(err.command).slice(0, 120) : undefined,
+    timeout: Boolean(
+      (err && err.code === 'ETIMEDOUT') ||
+      /ETIMEDOUT|timeout|timed out/i.test((err && err.message) || String(err))
+    ),
+  };
+};
+
+const formatSmtpDiagnostics = (err) => {
+  const d = describeSmtpFailure(err);
+  const parts = [`category=${d.category}`];
+  if (d.code) parts.push(`code=${d.code}`);
+  if (d.responseCode != null) parts.push(`smtpCode=${d.responseCode}`);
+  if (d.timeout) parts.push('timeout=true');
+  if (d.command) parts.push(`command=${d.command}`);
+  if (d.response) parts.push(`smtpResponse=${d.response}`);
+  return parts.join(' | ');
 };
 
 const resendHeaders = () => ({
@@ -132,6 +163,7 @@ export const testSmtpConnection = async () => {
       ...status,
     };
   }
+  warnSenderMismatch();
   try {
     await transport.verify();
     return {
@@ -144,28 +176,34 @@ export const testSmtpConnection = async () => {
     return {
       ok: false,
       status: classifySmtpError(err),
-      detail: sanitizeErrorDetail(err),
+      detail: `${formatSmtpDiagnostics(err)}`,
       ...status,
     };
   }
 };
 
 const buildTransporter = () => {
-  transporter = nodemailer.createTransport({
-    host: config.email.host,
-    port: config.email.port,
-    secure: config.email.port === 465,
-    auth: {
-      user: config.email.user,
-      pass: config.email.pass,
-    },
-    connectionTimeout: 10 * 1000,
-    greetingTimeout: 10 * 1000,
-    socketTimeout: 20 * 1000,
-  });
-
+  transporter = nodemailer.createTransport(smtpTransportOptions());
   return transporter;
 };
+
+// Gmail SMTP: smtp.gmail.com:587 with STARTTLS (secure=false), App Password
+// auth, and requireTLS so AUTH never proceeds without an encrypted channel.
+// requireTLS also turns a blocked/broken STARTTLS negotiation into a fast,
+// classified failure instead of a silent stall on public ports.
+export const smtpTransportOptions = () => ({
+  host: config.email.host,
+  port: config.email.port,
+  secure: config.email.port === 465,
+  auth: {
+    user: config.email.user,
+    pass: config.email.pass,
+  },
+  requireTLS: config.email.port !== 465,
+  connectionTimeout: 10 * 1000,
+  greetingTimeout: 10 * 1000,
+  socketTimeout: 20 * 1000,
+});
 
 const getTransporter = () => {
   if (transporter) return transporter;
@@ -183,6 +221,27 @@ const getTransporter = () => {
     return null;
   }
   return buildTransporter();
+};
+
+export const extractSenderAddress = (from) => {
+  if (!from) return '';
+  const m = String(from).match(/<([^>]+)>/);
+  return (m ? m[1] : String(from)).trim();
+};
+
+// Gmail SMTP only accepts EMAIL_FROM whose address matches EMAIL_USER. Emit a
+// safe one-time warning with no addresses or secrets when they disagree.
+const warnSenderMismatch = () => {
+  if (warnedFromMismatch) return;
+  const fromAddr = extractSenderAddress(config.email.from);
+  const authUser = config.email.user;
+  if (!fromAddr || !authUser || fromAddr.toLowerCase() === authUser.toLowerCase()) return;
+  warnedFromMismatch = true;
+  console.warn(
+    '[Email] EMAIL_FROM sender address does not match EMAIL_USER — Gmail SMTP will REJECT sends ' +
+    '("The From address does not match the authenticated identity"). ' +
+    'Set EMAIL_FROM to "ExamAI <" + EMAIL_USER + ">" (see server/.env.example).'
+  );
 };
 
 export const sendEmail = async ({ to, subject, html, text }) => {
@@ -217,6 +276,8 @@ export const sendEmail = async ({ to, subject, html, text }) => {
     return { skipped: true };
   }
 
+  warnSenderMismatch();
+
   try {
     const info = await transport.sendMail({
       from: config.email.from,
@@ -233,7 +294,7 @@ export const sendEmail = async ({ to, subject, html, text }) => {
   } catch (err) {
     console.error(
       `[Email] SMTP send FAILED | to=${to} | subject=${subject} | ` +
-      `category=${classifySmtpError(err)} | detail=${sanitizeErrorDetail(err)}`
+      `${formatSmtpDiagnostics(err)} | detail=${sanitizeErrorDetail(err)}`
     );
     throw err;
   }
