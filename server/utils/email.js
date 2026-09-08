@@ -20,6 +20,14 @@ let warnedFromMismatch = false;
 //                          without reachable SMTP ports). Uses RESEND_API_KEY.
 const selectedProvider = () => (config.email.provider === 'resend' ? 'resend' : 'smtp');
 
+// Bounded SMTP timeouts. connectionTimeout must be generous enough for Render's
+// proxied egress: the previous 10s limit fired Nodemailer's internal
+// "Connection timeout" (code=ETIMEDOUT, command=CONN) while the OS was still
+// retrying unanswered SYNs. 30s/30s/60s keeps failures fast but not premature.
+const SMTP_CONNECT_TIMEOUT_MS = 30 * 1000;
+const SMTP_GREETING_TIMEOUT_MS = 30 * 1000;
+const SMTP_SOCKET_TIMEOUT_MS = 60 * 1000;
+
 export const getEmailConfigStatus = () => {
   const provider = selectedProvider();
   return {
@@ -33,6 +41,9 @@ export const getEmailConfigStatus = () => {
     apiKey: provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a',
     from: config.email.from || '(unset)',
     linksBase: config.clientUrl,
+    connectionTimeoutMs: SMTP_CONNECT_TIMEOUT_MS,
+    greetingTimeoutMs: SMTP_GREETING_TIMEOUT_MS,
+    socketTimeoutMs: SMTP_SOCKET_TIMEOUT_MS,
   };
 };
 
@@ -251,9 +262,9 @@ export const smtpTransportOptions = (overrides = {}) => ({
     pass: config.email.pass,
   },
   requireTLS: config.email.port !== 465,
-  connectionTimeout: 10 * 1000,
-  greetingTimeout: 10 * 1000,
-  socketTimeout: 20 * 1000,
+  connectionTimeout: SMTP_CONNECT_TIMEOUT_MS,
+  greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+  socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
 });
 
 const getTransporter = () => {

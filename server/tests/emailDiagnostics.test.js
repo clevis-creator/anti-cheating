@@ -22,6 +22,10 @@ test('getEmailConfigStatus reports masked config without exposing credentials', 
   assert.ok(['set', 'missing'].includes(s.pass), 'pass must be reported as set or missing');
   assert.equal(typeof s.from, 'string');
   assert.equal(typeof s.linksBase, 'string');
+  assert.equal(typeof s.connectionTimeoutMs, 'number');
+  assert.equal(typeof s.greetingTimeoutMs, 'number');
+  assert.equal(typeof s.socketTimeoutMs, 'number');
+  assert.ok(s.connectionTimeoutMs > 0 && s.socketTimeoutMs > 0, 'timeout bounds must be exposed');
   assert.ok(['smtp', 'resend'].includes(s.provider), 'provider must be smtp or resend');
   assert.equal(s.apiKey, s.provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a');
   if (config.email.user) assert.equal(s.user, 'set');
@@ -66,7 +70,9 @@ test('smtpTransportOptions configure Gmail STARTTLS correctly (587, secure=false
   assert.equal(o.secure, false);
   assert.equal(o.requireTLS, true, 'requireTLS must be mandatory on port 587');
   assert.ok('user' in o.auth && 'pass' in o.auth, 'auth user/pass keys must be present');
-  assert.ok(o.connectionTimeout > 0 && o.socketTimeout > 0, 'timeouts must be bounded');
+  assert.equal(o.connectionTimeout, 30 * 1000, 'connect bound must be 30s (slow egress tolerant)');
+  assert.equal(o.greetingTimeout, 30 * 1000, 'greeting bound must be 30s');
+  assert.equal(o.socketTimeout, 60 * 1000, 'socket bound must be 60s');
 });
 
 test('smtpTransportOptions prefers a resolved IPv4 host and preserves SNI servername', () => {
