@@ -7,6 +7,7 @@ import {
   classifyApiError,
   describeSmtpFailure,
   smtpTransportOptions,
+  pickIpv4Address,
   extractSenderAddress,
   sendEmail,
 } from '../utils/email.js';
@@ -66,6 +67,30 @@ test('smtpTransportOptions configure Gmail STARTTLS correctly (587, secure=false
   assert.equal(o.requireTLS, true, 'requireTLS must be mandatory on port 587');
   assert.ok('user' in o.auth && 'pass' in o.auth, 'auth user/pass keys must be present');
   assert.ok(o.connectionTimeout > 0 && o.socketTimeout > 0, 'timeouts must be bounded');
+});
+
+test('smtpTransportOptions prefers a resolved IPv4 host and preserves SNI servername', () => {
+  const o = smtpTransportOptions({ host: '142.250.72.19', servername: 'smtp.gmail.com' });
+  assert.equal(o.host, '142.250.72.19', 'IPv4 literal must be used as the connect host');
+  assert.equal(o.servername, 'smtp.gmail.com', 'original hostname must drive SNI/TLS validation');
+  assert.equal(o.requireTLS, true);
+  assert.equal(o.secure, false);
+});
+
+test('smtpTransportOptions keeps hostname host when no IPv4 override is available', () => {
+  const o = smtpTransportOptions();
+  assert.equal(o.host, config.email.host);
+  assert.equal(o.servername, undefined);
+});
+
+test('pickIpv4Address returns the first resolved IPv4 address or null', () => {
+  assert.equal(
+    pickIpv4Address([{ address: '142.250.72.19', family: 4 }]),
+    '142.250.72.19'
+  );
+  assert.equal(pickIpv4Address([]), null);
+  assert.equal(pickIpv4Address(null), null);
+  assert.equal(pickIpv4Address([{ address: '' }]), null);
 });
 
 test('smtpTransportOptions uses implicit TLS on port 465 (requireTLS not needed)', () => {

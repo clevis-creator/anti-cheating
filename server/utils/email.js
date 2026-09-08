@@ -1,3 +1,4 @@
+import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 import config from '../config/index.js';
 
@@ -154,6 +155,9 @@ export const testSmtpConnection = async () => {
     }
   }
 
+  if (config.email.user && config.email.pass) {
+    await ensureResolvedHost();
+  }
   const transport = getTransporter();
   if (!transport) {
     return {
@@ -183,18 +187,65 @@ export const testSmtpConnection = async () => {
 };
 
 const buildTransporter = () => {
-  transporter = nodemailer.createTransport(smtpTransportOptions());
+  transporter = nodemailer.createTransport(
+    smtpTransportOptions({
+      host: smtpHostOverride,
+      servername: smtpServername,
+    })
+  );
   return transporter;
+};
+
+export const pickIpv4Address = (addresses) => {
+  if (!Array.isArray(addresses) || !addresses.length) return null;
+  const first = addresses[0];
+  return first && first.address ? String(first.address) : null;
+};
+
+// smtp.gmail.com publishes AAAA (IPv6) records. Render's network has no IPv6
+// route, so Nodemailer's resolver — which resolves BOTH families and randomly
+// picks an address — would connect to an IPv6 address and fail with
+// ESOCKET/ENETUNREACH. Prefer IPv4 by handing Nodemailer a resolved IPv4
+// literal as `host` (its resolver then short-circuits) while keeping the
+// original hostname as `servername` so STARTTLS/SNI still validates against
+// Gmail's certificate.
+let smtpHostOverride = null;
+let smtpServername = null;
+let smtpHostResolution = null;
+
+const ensureResolvedHost = () => {
+  if (smtpHostResolution) return smtpHostResolution;
+  if (selectedProvider() !== 'smtp' || !config.email.host) return Promise.resolve();
+  smtpHostResolution = dns
+    .lookup(config.email.host, { family: 4, all: true })
+    .then((addresses) => {
+      const addr = pickIpv4Address(addresses);
+      if (addr) {
+        smtpHostOverride = addr;
+        smtpServername = config.email.host;
+        console.log(
+          `[Email] smtp host resolved to IPv4 ${smtpHostOverride} | ` +
+          `servername=${smtpServername} (SNI)`
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn(
+        `[Email] IPv4 resolution skipped (${(err && err.code) || 'dns-error'}) — using hostname as-is`
+      );
+    });
+  return smtpHostResolution;
 };
 
 // Gmail SMTP: smtp.gmail.com:587 with STARTTLS (secure=false), App Password
 // auth, and requireTLS so AUTH never proceeds without an encrypted channel.
 // requireTLS also turns a blocked/broken STARTTLS negotiation into a fast,
 // classified failure instead of a silent stall on public ports.
-export const smtpTransportOptions = () => ({
-  host: config.email.host,
+export const smtpTransportOptions = (overrides = {}) => ({
+  host: overrides.host || config.email.host,
   port: config.email.port,
   secure: config.email.port === 465,
+  servername: overrides.servername || undefined,
   auth: {
     user: config.email.user,
     pass: config.email.pass,
@@ -268,6 +319,9 @@ export const sendEmail = async ({ to, subject, html, text }) => {
     }
   }
 
+  if (config.email.user && config.email.pass) {
+    await ensureResolvedHost();
+  }
   const transport = getTransporter();
   if (!transport) {
     console.error(
