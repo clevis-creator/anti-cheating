@@ -15,10 +15,18 @@ let warnedFromMismatch = false;
 // frontend origin that the verification link points to.
 
 // Transport selection:
-//   EMAIL_PROVIDER=smtp    (default) Nodemailer on EMAIL_HOST/PORT/USER/PASS.
-//   EMAIL_PROVIDER=resend  HTTPS transactional API (works on Render/Vercel
-//                          without reachable SMTP ports). Uses RESEND_API_KEY.
-const selectedProvider = () => (config.email.provider === 'resend' ? 'resend' : 'smtp');
+//   EMAIL_PROVIDER=smtp       (default) Nodemailer on EMAIL_HOST/PORT/USER/PASS.
+//   EMAIL_PROVIDER=resend     HTTPS transactional API (works on Render/Vercel
+//                             without reachable SMTP ports). Uses RESEND_API_KEY.
+//   EMAIL_PROVIDER=mailersend HTTPS transactional API (works on Render/Vercel
+//                             — no SMTP ports needed). Uses MAILERSEND_API_KEY
+//                             and a legitimate trial sender domain that requires
+//                             no purchased domain and no DNS changes.
+const selectedProvider = () => {
+  if (config.email.provider === 'mailersend') return 'mailersend';
+  if (config.email.provider === 'resend') return 'resend';
+  return 'smtp';
+};
 
 // Bounded SMTP timeouts. connectionTimeout must be generous enough for Render's
 // proxied egress: the previous 10s limit fired Nodemailer's internal
@@ -39,6 +47,8 @@ export const getEmailConfigStatus = () => {
     user: config.email.user ? 'set' : 'missing',
     pass: config.email.pass ? 'set' : 'missing',
     apiKey: provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a',
+    mailersendApiKey:
+      provider === 'mailersend' ? (config.email.mailersendApiKey ? 'set' : 'missing') : 'n/a',
     from: config.email.from || '(unset)',
     linksBase: config.clientUrl,
     connectionTimeoutMs: SMTP_CONNECT_TIMEOUT_MS,
@@ -62,7 +72,9 @@ export const classifySmtpError = (err) => {
 };
 
 export const classifyApiError = (status) => {
+  if (status === 400 || status === 422) return 'message-rejected';
   if (status === 401 || status === 403) return 'auth-rejected';
+  if (status === 429) return 'rate-limited';
   if (status >= 500) return 'api-failed';
   return 'message-rejected';
 };
@@ -125,8 +137,126 @@ const sendViaApi = async ({ to, subject, html, text }) => {
   return { messageId: body.id || 'n/a', provider: 'resend', response: `HTTP ${res.status}` };
 };
 
+// ---- MailerSend (HTTPS transactional API) --------------------------------
+// https://developers.mailersend.com/api/v1/email
+// Suitable for Render Free because the transport is HTTPS/443 out, never SMTP.
+// The required sender is a legitimately issued trial domain sender supplied by
+// MailerSend (e.g. "MS_<random>@trial-<random>.mailersend.net") — no purchased
+// domain, no DNS records, no SMTP ports. The API key and sender come only from
+// environment variables and are never logged or returned from endpoints.
+const MAILERSEND_API_URL = 'https://api.mailersend.com/v1/email';
+const MAILERSEND_DOMAINS_URL = 'https://api.mailersend.com/v1/domains';
+const MAILERSEND_TIMEOUT_MS = 15 * 1000;
+
+const mailersendHeaders = () => ({
+  Authorization: `Bearer ${config.email.mailersendApiKey}`,
+  'Content-Type': 'application/json',
+});
+
+export const extractSenderName = (from) => {
+  if (!from) return '';
+  const m = String(from).match(/^([^<]+)</);
+  return (m ? m[1] : '').trim();
+};
+
+const plainTextFromHtml = (html) =>
+  String(html || '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const sendViaMailerSend = async ({ to, subject, html, text }) => {
+  const fromAddr = extractSenderAddress(config.email.from);
+  if (!fromAddr) {
+    const err = new Error(
+      'MailerSend requires EMAIL_FROM to be the trial-domain sender address' +
+      ' (e.g. "MS_xxx@trial-xxxxx.mailersend.net") — no send attempted'
+    );
+    err.category = 'config-error';
+    throw err;
+  }
+  const res = await fetch(MAILERSEND_API_URL, {
+    method: 'POST',
+    headers: mailersendHeaders(),
+    body: JSON.stringify({
+      from: { email: fromAddr, name: extractSenderName(config.email.from) || undefined },
+      to: [{ email: to }],
+      subject,
+      html,
+      text: text || plainTextFromHtml(html),
+    }),
+    signal: AbortSignal.timeout(MAILERSEND_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const err = new Error(`Provider API rejected request (HTTP ${res.status})`);
+    err.category = classifyApiError(res.status);
+    err.statusCode = res.status;
+    throw err;
+  }
+  const body = await res.json().catch(() => ({}));
+  return {
+    messageId: body.message_id || body.messageId || 'n/a',
+    provider: 'mailersend',
+    response: `HTTP ${res.status}`,
+  };
+};
+
 export const testSmtpConnection = async () => {
   const status = getEmailConfigStatus();
+
+  if (selectedProvider() === 'mailersend') {
+    if (!config.email.mailersendApiKey) {
+      return {
+        ok: false,
+        status: 'config-missing',
+        detail: 'MAILERSEND_API_KEY is missing — no provider API call attempted',
+        ...status,
+      };
+    }
+    if (!extractSenderAddress(config.email.from)) {
+      return {
+        ok: false,
+        status: 'config-missing',
+        detail: 'EMAIL_FROM must be set to the MailerSend trial-domain sender — no provider API call attempted',
+        ...status,
+      };
+    }
+    try {
+      const res = await fetch(MAILERSEND_DOMAINS_URL, {
+        method: 'GET',
+        headers: mailersendHeaders(),
+        signal: AbortSignal.timeout(MAILERSEND_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const domains = Array.isArray(body.data) ? body.data : [];
+        const trial = domains.filter((d) => /trial-/.test(String(d.name || '')));
+        return {
+          ok: true,
+          status: 'connection-ok',
+          detail: 'Provider API reachable and key accepted',
+          trialDomain: trial.length ? trial[0].name : null,
+          senderAddress: extractSenderAddress(config.email.from),
+          ...status,
+        };
+      }
+      return {
+        ok: false,
+        status: classifyApiError(res.status),
+        detail: `Provider API responded HTTP ${res.status}`,
+        ...status,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 'connection-failed',
+        detail: sanitizeErrorDetail(err),
+        ...status,
+      };
+    }
+  }
+
   if (selectedProvider() === 'resend') {
     if (!config.email.apiKey) {
       return {
@@ -307,7 +437,32 @@ const warnSenderMismatch = () => {
 };
 
 export const sendEmail = async ({ to, subject, html, text }) => {
-  if (selectedProvider() === 'resend') {
+  const provider = selectedProvider();
+
+  if (provider === 'mailersend') {
+    if (!config.email.mailersendApiKey) {
+      console.error(
+        `[Email] SKIPPED — MAILERSEND_API_KEY not configured | to=${to} | subject=${subject}`
+      );
+      return { skipped: true };
+    }
+    try {
+      const info = await sendViaMailerSend({ to, subject, html, text });
+      console.log(
+        `[Email] provider accepted message (mailersend) | to=${to} | subject=${subject} | ` +
+        `messageId=${info.messageId} | status=${info.response}`
+      );
+      return info;
+    } catch (err) {
+      console.error(
+        `[Email] provider send FAILED | to=${to} | subject=${subject} | ` +
+        `category=${err.category || 'unknown-error'} | detail=${sanitizeErrorDetail(err)}`
+      );
+      throw err;
+    }
+  }
+
+  if (provider === 'resend') {
     if (!config.email.apiKey) {
       console.error(
         `[Email] SKIPPED — RESEND_API_KEY not configured | to=${to} | subject=${subject}`

@@ -26,6 +26,7 @@ const config = {
     from: process.env.EMAIL_FROM || 'ExamAI <noreply@examai.com>',
     provider: (process.env.EMAIL_PROVIDER || 'smtp').toLowerCase(),
     apiKey: process.env.RESEND_API_KEY || '',
+    mailersendApiKey: process.env.MAILERSEND_API_KEY || '',
   },
   ai: {
     geminiKey: process.env.GEMINI_API_KEY || '',

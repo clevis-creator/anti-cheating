@@ -26,8 +26,12 @@ test('getEmailConfigStatus reports masked config without exposing credentials', 
   assert.equal(typeof s.greetingTimeoutMs, 'number');
   assert.equal(typeof s.socketTimeoutMs, 'number');
   assert.ok(s.connectionTimeoutMs > 0 && s.socketTimeoutMs > 0, 'timeout bounds must be exposed');
-  assert.ok(['smtp', 'resend'].includes(s.provider), 'provider must be smtp or resend');
+  assert.ok(['smtp', 'resend', 'mailersend'].includes(s.provider), 'provider must be smtp, resend, or mailersend');
   assert.equal(s.apiKey, s.provider === 'resend' ? (config.email.apiKey ? 'set' : 'missing') : 'n/a');
+  assert.equal(
+    s.mailersendApiKey,
+    s.provider === 'mailersend' ? (config.email.mailersendApiKey ? 'set' : 'missing') : 'n/a'
+  );
   if (config.email.user) assert.equal(s.user, 'set');
   if (config.email.pass) assert.equal(s.pass, 'set');
 });
@@ -57,10 +61,11 @@ test('classifySmtpError distinguishes auth, connection, and message rejection', 
 });
 
 test('classifyApiError maps provider HTTP statuses to truthful categories', () => {
+  assert.equal(classifyApiError(400), 'message-rejected');
   assert.equal(classifyApiError(401), 'auth-rejected');
   assert.equal(classifyApiError(403), 'auth-rejected');
   assert.equal(classifyApiError(422), 'message-rejected');
-  assert.equal(classifyApiError(429), 'message-rejected');
+  assert.equal(classifyApiError(429), 'rate-limited');
   assert.equal(classifyApiError(500), 'api-failed');
   assert.equal(classifyApiError(502), 'api-failed');
 });
@@ -153,6 +158,8 @@ test('extractSenderAddress parses display-name envelope', () => {
 const credsConfigured =
   getEmailConfigStatus().provider === 'resend'
     ? config.email.apiKey
+    : getEmailConfigStatus().provider === 'mailersend'
+    ? config.email.mailersendApiKey
     : Boolean(config.email.user && config.email.pass);
 
 test('sendEmail skips (returns skipped) when the selected provider credentials are absent', { skip: credsConfigured }, async () => {
