@@ -22,7 +22,19 @@ export default function LoginPage() {
   const onSubmit = async (values) => {
     setLoading(true);
     try {
-      const user = await login(values.email, values.password);
+      let user;
+      try {
+        user = await login(values.email, values.password);
+      } catch (err) {
+        const isNetworkError =
+          !err?.response &&
+          (err?.code === 'ERR_NETWORK' || err?.message?.toLowerCase().includes('network error'));
+        if (!isNetworkError) throw err;
+        toast.loading('Server is waking up, please wait…');
+        await new Promise((resolve) => setTimeout(resolve, 8000));
+        user = await login(values.email, values.password);
+        toast.remove();
+      }
       if (user.mustChangePassword) {
         toast('Please set a new password before continuing.');
         navigate(`/${user.role}/profile`, { replace: true });
@@ -32,6 +44,7 @@ export default function LoginPage() {
       const dest = location.state?.from?.pathname || roleHome(user.role);
       navigate(dest, { replace: true });
     } catch (err) {
+      toast.remove();
       toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
